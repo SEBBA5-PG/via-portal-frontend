@@ -1,1 +1,45 @@
 @import "tailwindcss";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
+@import "@fontsource/nunito/400.css";
+@import "@fontsource/nunito/600.css";
+@import "@fontsource/nunito/700.css";
+
+/*
+  Tokens extraídos del Figma de referencia (archivo VIA-AP, frames Dashboard/Usuarios)
+  vía Figma Dev Mode MCP. La tipografía de cuerpo se corrige a Nunito: 2 PILAR.md
+  (fuente cerrada) fija Nunito + Jakarta Sans como tipografía oficial; el Figma usa
+  Poppins, que no es canon.
+*/
+@theme {
+  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, sans-serif;
+
+  --color-cafe: #6c3a1f;
+  --color-cafe-muted: #b09867;
+  --color-institucional: #fde6b6;
+  --color-institucional-sidebar: #eacc90;
+  --color-card-from: #fff9ed;
+  --color-card-to: #fff2d7;
+  --color-acento: #f5a623;
+  --color-exito: #4a8d40;
+  --color-exito-bg: rgba(167, 191, 73, 0.34);
+  --color-info: #4fa8f0;
+  --color-alerta-from: #ffefed;
+  --color-alerta-to: #ffa984;
+
+  --radius-card: 24px;
+  --radius-panel: 30px;
+  --radius-pill: 999px;
+}
+
+:root {
+  color-scheme: light;
+  font-family: var(--font-body);
+}
+
+body {
+  margin: 0;
+  background: var(--color-institucional);
+  color: var(--color-cafe);
+}
