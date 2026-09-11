@@ -1,0 +1,87 @@
+/* Animaciones del fondo del login. Todo sobre transform/opacity (compositor GPU, sin JS por
+   frame). El avance del recorrido en sí lo lleva usePlayaActiva, que se gatea por su cuenta
+   con prefers-reduced-motion — la regla del final de este archivo solo apaga el movimiento
+   visual, no el timer. */
+
+/* Encuadre de la isla. En pantallas grandes se sube respecto al centro para que su mitad
+   superior quede despejada por encima de la card. En móvil no: la card ocupa casi todo el
+   alto útil, no hay hueco que despejar, y subirla solo mete un trozo de ilustración justo
+   detrás del logo. Ahí la isla se queda centrada, de telón de fondo, y el color de la playa
+   es el que lleva la identidad. */
+.ap-encuadre {
+  padding-bottom: 0;
+}
+
+@media (min-width: 1024px) {
+  .ap-encuadre {
+    padding-bottom: 10vh;
+  }
+}
+
+.ap-isla {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  /* drop-shadow sigue la silueta del alfa, no la caja: la isla flota de verdad. */
+  filter: drop-shadow(0 30px 45px rgba(12, 8, 4, 0.5));
+}
+
+/* El deslizamiento es hacia arriba: la playa que sale se va por arriba y la que entra sube
+   desde abajo, replicando el mapa vertical de progresión de la app (2 PILAR.md §3, dibujado
+   como `graph BT` con Achira abajo y Huila arriba). */
+@keyframes ap-entra {
+  from {
+    transform: translate3d(0, 40%, 0);
+    opacity: 0;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes ap-sale {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(0, -40%, 0);
+    opacity: 0;
+  }
+}
+
+/* Flotación continua entre transiciones, para que la escena no se congele en los 6 s de
+   pausa. Va en el contenedor, no en las islas, para no pisar los transform de arriba. */
+@keyframes ap-flota {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -1.6%, 0);
+  }
+}
+
+.ap-entra {
+  animation: ap-entra 1.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+.ap-sale {
+  animation: ap-sale 1.4s cubic-bezier(0.55, 0, 0.55, 0.2) both;
+}
+
+.ap-flota {
+  animation: ap-flota 9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ascenso-playas *,
+  .ascenso-playas *::before,
+  .ascenso-playas *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

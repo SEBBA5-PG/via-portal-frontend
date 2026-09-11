@@ -10,6 +10,7 @@ export function CodeInput({ value, onChange, autoFocus }: Props) {
       autoFocus={autoFocus}
       inputMode="numeric"
       pattern="[0-9]*"
+      autoComplete="one-time-code"
       maxLength={6}
       value={value}
       onChange={(e) => onChange(e.target.value.replace(/\D/g, '').slice(0, 6))}

@@ -1,5 +1,8 @@
 import type { Rol } from './roles'
 
+// Operador Logístico salió del Portal Web (VIA BRAIN, 2026-09-11) — esta matriz ya no tiene
+// columna O. Sus antiguas restricciones de entrega/stock local viven ahora en el sistema de
+// entregas y logística independiente, fuera de este proyecto.
 export type Nivel = 'completo' | 'restringido' | 'oculto'
 
 export interface Categoria {
@@ -23,15 +26,15 @@ export const CATEGORIAS: Categoria[] = [
     numero: 2,
     nombre: 'Home y dashboard',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'restringido' },
-    restriccion: { C: 'Su territorio', O: 'Su zona' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
+    restriccion: { C: 'Su territorio' },
   },
   {
     id: 'PW-03',
     numero: 3,
     nombre: 'Usuarios y ciclo de vida',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'restringido', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'restringido', C: 'restringido' },
     restriccion: {
       A: 'Sin impersonar, sin ajustar balance',
       C: 'Su territorio, PII enmascarada, solo solicitar bloqueo',
@@ -42,7 +45,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 4,
     nombre: 'Roles y permisos',
     bloque: 'Gobierno',
-    nivel: { S: 'completo', A: 'restringido', C: 'oculto', O: 'oculto' },
+    nivel: { S: 'completo', A: 'restringido', C: 'oculto' },
     restriccion: { A: 'Asigna/revoca solo roles inferiores; no edita permisos' },
   },
   {
@@ -50,7 +53,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 5,
     nombre: 'Misiones',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Crea local (pendiente de aprobación); solo solicita pausa/cancelación' },
   },
   {
@@ -58,7 +61,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 6,
     nombre: 'Evidencias',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Su jurisdicción' },
   },
   {
@@ -66,10 +69,9 @@ export const CATEGORIAS: Categoria[] = [
     numero: 7,
     nombre: 'Eventos y operación de campo',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'restringido' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: {
       C: 'Crea local y publica; solo solicita cancelación',
-      O: 'Solo check-in manual',
     },
   },
   {
@@ -77,10 +79,9 @@ export const CATEGORIAS: Categoria[] = [
     numero: 8,
     nombre: 'Recompensas, inventario, canjes y entrega',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'restringido' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: {
       C: 'Entrega en su municipio, reporta stock local',
-      O: 'Entrega y reporta stock local',
     },
   },
   {
@@ -88,7 +89,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 9,
     nombre: 'Economía y ledger',
     bloque: 'Economía',
-    nivel: { S: 'completo', A: 'restringido', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'restringido', C: 'restringido' },
     restriccion: { A: 'Ve el ledger, no ajusta', C: 'Su territorio, agregado' },
   },
   {
@@ -96,7 +97,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 10,
     nombre: 'Playas, Escudo y Ranking',
     bloque: 'Economía',
-    nivel: { S: 'completo', A: 'restringido', C: 'oculto', O: 'oculto' },
+    nivel: { S: 'completo', A: 'restringido', C: 'oculto' },
     restriccion: { A: 'Ve desglose y excluye; no cambia umbrales ni fórmula' },
   },
   {
@@ -104,7 +105,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 11,
     nombre: 'Referidos y red de crecimiento',
     bloque: 'Economía',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Su rama territorial, solo lectura' },
   },
   {
@@ -112,7 +113,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 12,
     nombre: 'Encuestas y formularios',
     bloque: 'Gobierno',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Crea; resultados sin confirmar' },
     bloqueLegal: true,
   },
@@ -121,14 +122,14 @@ export const CATEGORIAS: Categoria[] = [
     numero: 13,
     nombre: 'Contenido (CMS técnico)',
     bloque: 'Sistema',
-    nivel: { S: 'completo', A: 'completo', C: 'oculto', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'oculto' },
   },
   {
     id: 'PW-14',
     numero: 14,
     nombre: 'Notificaciones y mensajería',
     bloque: 'Operación',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Solo solicitar envío' },
   },
   {
@@ -136,7 +137,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 15,
     nombre: 'Seguridad y antifraude',
     bloque: 'Gobierno',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { C: 'Ve señales de su jurisdicción, no revierte' },
   },
   {
@@ -144,7 +145,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 16,
     nombre: 'Auditoría y trazabilidad',
     bloque: 'Gobierno',
-    nivel: { S: 'completo', A: 'oculto', C: 'oculto', O: 'oculto' },
+    nivel: { S: 'completo', A: 'oculto', C: 'oculto' },
     restriccion: { S: 'Exclusivo' },
   },
   {
@@ -152,7 +153,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 17,
     nombre: 'Reportes y exportaciones',
     bloque: 'Economía',
-    nivel: { S: 'completo', A: 'completo', C: 'restringido', O: 'oculto' },
+    nivel: { S: 'completo', A: 'completo', C: 'restringido' },
     restriccion: { A: 'PII condicionada', C: 'Solo nombre, sin PII' },
   },
   {
@@ -160,7 +161,7 @@ export const CATEGORIAS: Categoria[] = [
     numero: 18,
     nombre: 'Configuración global del sistema',
     bloque: 'Sistema',
-    nivel: { S: 'completo', A: 'oculto', C: 'oculto', O: 'oculto' },
+    nivel: { S: 'completo', A: 'oculto', C: 'oculto' },
     restriccion: { S: 'Con Doble Firma' },
   },
 ]

@@ -13,15 +13,18 @@ import {
 } from './storage'
 import { generarSecretoTotp, verificarCodigoTotp } from './totp'
 
-// PW-01 §6/7: duración de sesión DIFERIDA — valor de trabajo propuesto para el demo.
+// PW-01 §6/7: duración de sesión de S/A sigue DIFERIDA a desarrollo — valor de trabajo para
+// el demo. Coordinador Territorial sí tiene decisión de producto: turno de 10h (PW-01,
+// 2026-09-11). Operador Logístico salió del portal — ya no tiene entrada aquí.
 const DURACION_SESION_MS: Record<Rol, number> = {
   S: 8 * 60 * 60 * 1000,
   A: 8 * 60 * 60 * 1000,
-  C: 8 * 60 * 60 * 1000,
-  O: 12 * 60 * 60 * 1000,
+  C: 10 * 60 * 60 * 1000,
 }
+// PW-01, 2026-09-11: 3 intentos fallidos de PIN → bloqueo temporal de 15 min; si se agotan
+// los intentos de nuevo tras ese bloqueo, escala a bloqueo duro (desbloqueo manual).
 const DURACION_BLOQUEO_MS = 15 * 60 * 1000
-const INTENTOS_MAXIMOS = 5
+const INTENTOS_MAXIMOS = 3
 const DURACION_CODIGO_MS = 5 * 60 * 1000
 const DURACION_DISPOSITIVO_CONFIADO_MS = 30 * 24 * 60 * 60 * 1000
 
@@ -34,6 +37,11 @@ interface Sesion {
 interface RegistroBloqueo {
   intentos: number
   bloqueadoHasta: number | null
+  // true desde el primer bloqueo temporal — si se agotan los intentos otra vez, escala a duro.
+  huboBloqueoPrevio: boolean
+  // Bloqueo duro (PW-01): sin auto-expiración, requiere desbloqueo manual de un
+  // Administrador/Superadministrador. En este demo, ese desbloqueo lo simula `desbloquear()`.
+  duro: boolean
 }
 
 interface ConfianzaDispositivo {
@@ -59,6 +67,7 @@ type ResultadoLogin =
   | { ok: true }
   | { ok: false; tipo: 'credenciales'; mensaje: string }
   | { ok: false; tipo: 'bloqueado'; hasta: number }
+  | { ok: false; tipo: 'bloqueado-duro' }
 
 type ResultadoCodigo = { ok: true } | { ok: false; mensaje: string }
 
@@ -71,19 +80,27 @@ interface AuthContextValue {
   sesion: Sesion | null
   usuarioActual: DemoUser | null
   pendiente: Pendiente | null
+  // PW-01: Coordinador Territorial, primer acceso desde un dispositivo nuevo — antes de
+  // crear sesión, hay que enrolarlo (un solo dispositivo activo por cuenta).
+  dispositivoPendiente: { userId: string } | null
   motivoSalida: 'expirada' | 'otro-dispositivo' | null
   recuperacion: Recuperacion | null
-  login: (email: string, password: string) => ResultadoLogin
+  login: (cedula: string, pin: string) => ResultadoLogin
+  confirmarEnrolamiento: () => void
   confirmarTotpSetup: (codigo: string) => ResultadoCodigo
   confirmarWhatsapp: (codigo: string) => ResultadoCodigo
   confirmarTotpChallenge: (codigo: string, recordarDispositivo: boolean) => ResultadoCodigo
   reenviarCodigoWhatsapp: () => void
+  cancelarPendiente: () => void
   cerrarSesion: () => void
   limpiarMotivoSalida: () => void
   solicitarRecuperacion: (email: string) => ResultadoCodigo
   confirmarCodigoRecuperacion: (codigo: string) => ResultadoCodigo
   restablecerContrasena: (nueva: string) => ResultadoCodigo
-  estaBloqueado: (email: string) => number | null
+  estaBloqueado: (cedula: string) => number | null
+  // Demo únicamente: en producción el bloqueo duro lo levanta un Administrador desde la
+  // ficha del usuario (PW-03), no la propia persona bloqueada.
+  desbloquearComoAdminDemo: (cedula: string) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -100,6 +117,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [confianzas, setConfianzas] = useState<Record<string, ConfianzaDispositivo>>(() =>
     leerJSON('deviceTrust', {}),
   )
+  // PW-01: un solo dispositivo enrolado por cuenta — enrolar uno nuevo desactiva el anterior.
+  // Distinto de `confianzas` (que solo aplica al desafío OTP de S/A, ver Etapa 2FA).
+  const [dispositivosEnrolados, setDispositivosEnrolados] = useState<Record<string, string>>(() =>
+    leerJSON('enrolledDevices', {}),
+  )
+  const [dispositivoPendiente, setDispositivoPendiente] = useState<{ userId: string } | null>(null)
   const [colaPendiente, setColaPendiente] = useState<Paso[]>([])
   const [pendiente, setPendiente] = useState<Pendiente | null>(null)
   const [motivoSalida, setMotivoSalida] = useState<'expirada' | 'otro-dispositivo' | null>(null)
@@ -108,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => escribirJSON('users', usuarios), [usuarios])
   useEffect(() => escribirJSON('lockouts', bloqueos), [bloqueos])
   useEffect(() => escribirJSON('deviceTrust', confianzas), [confianzas])
+  useEffect(() => escribirJSON('enrolledDevices', dispositivosEnrolados), [dispositivosEnrolados])
 
   // Sesión única PERO por cuenta (PW-01 §9), no por navegador: cada cuenta tiene su propia
   // llave `session:<userId>` en localStorage (compartida entre pestañas). Qué cuenta muestra
@@ -162,10 +186,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuarios((prev) => prev.map((u) => (u.id === userId ? { ...u, ...cambios } : u)))
   }
 
-  function dispositivoConfiado(userId: string): boolean {
-    const c = confianzas[userId]
-    return !!c && c.deviceId === idDeEsteDispositivo() && c.expiraEn > Date.now()
-  }
+  // `dispositivoConfiado` (recordar dispositivo 30 días para saltar el desafío OTP) se
+  // reincorpora en la Etapa 2FA — por ahora `confianzas` solo se escribe, ver
+  // `confirmarTotpChallenge` más abajo, pendiente de rediseño junto con esa etapa.
 
   function crearSesion(userId: string) {
     const user = usuarios.find((u) => u.id === userId)
@@ -180,6 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSesion(nueva)
     setColaPendiente([])
     setPendiente(null)
+    setDispositivoPendiente(null)
   }
 
   function avanzarCola(cola: Paso[], userId: string) {
@@ -205,43 +229,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function login(email: string, password: string): ResultadoLogin {
-    const correo = email.trim().toLowerCase()
-    const user = usuarios.find((u) => u.email.toLowerCase() === correo)
+  // PW-01: identificador propio del portal = cédula (no celular/email como la app), primer
+  // factor = PIN numérico. El desafío OTP de S/A (Etapa 2FA) todavía no engancha aquí — por
+  // ahora, tras el PIN correcto, entra directo (salvo enrolamiento de dispositivo de C).
+  function login(cedula: string, pin: string): ResultadoLogin {
+    const cc = cedula.trim()
+    const user = usuarios.find((u) => u.cedula === cc)
     if (!user) {
-      return { ok: false, tipo: 'credenciales', mensaje: 'Correo o contraseña incorrectos.' }
+      return { ok: false, tipo: 'credenciales', mensaje: 'No encontramos una cuenta con esa cédula.' }
     }
     const bloqueo = bloqueos[user.id]
+    if (bloqueo?.duro) {
+      return { ok: false, tipo: 'bloqueado-duro' }
+    }
     if (bloqueo?.bloqueadoHasta && bloqueo.bloqueadoHasta > Date.now()) {
       return { ok: false, tipo: 'bloqueado', hasta: bloqueo.bloqueadoHasta }
     }
-    if (user.password !== password) {
+    if (user.pin !== pin) {
       const intentos = (bloqueo?.intentos ?? 0) + 1
       if (intentos >= INTENTOS_MAXIMOS) {
+        if (bloqueo?.huboBloqueoPrevio) {
+          setBloqueos((prev) => ({
+            ...prev,
+            [user.id]: { intentos, bloqueadoHasta: null, huboBloqueoPrevio: true, duro: true },
+          }))
+          return { ok: false, tipo: 'bloqueado-duro' }
+        }
         const hasta = Date.now() + DURACION_BLOQUEO_MS
-        setBloqueos((prev) => ({ ...prev, [user.id]: { intentos, bloqueadoHasta: hasta } }))
+        setBloqueos((prev) => ({
+          ...prev,
+          [user.id]: { intentos: 0, bloqueadoHasta: hasta, huboBloqueoPrevio: true, duro: false },
+        }))
         return { ok: false, tipo: 'bloqueado', hasta }
       }
-      setBloqueos((prev) => ({ ...prev, [user.id]: { intentos, bloqueadoHasta: null } }))
+      setBloqueos((prev) => ({
+        ...prev,
+        [user.id]: { intentos, bloqueadoHasta: null, huboBloqueoPrevio: bloqueo?.huboBloqueoPrevio ?? false, duro: false },
+      }))
       const restantes = INTENTOS_MAXIMOS - intentos
       return {
         ok: false,
         tipo: 'credenciales',
-        mensaje: `Correo o contraseña incorrectos. Te queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`,
+        mensaje: `PIN incorrecto. Te queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`,
       }
     }
 
-    setBloqueos((prev) => ({ ...prev, [user.id]: { intentos: 0, bloqueadoHasta: null } }))
+    setBloqueos((prev) => ({ ...prev, [user.id]: { intentos: 0, bloqueadoHasta: null, huboBloqueoPrevio: false, duro: false } }))
 
-    const cola: Paso[] = []
-    if (requiere2FA(user.rol) && !user.totpConfigurado) cola.push('totp-setup')
-    if (!user.whatsappVerificado) cola.push('whatsapp-verify')
-    if (requiere2FA(user.rol) && user.totpConfigurado && !dispositivoConfiado(user.id)) {
-      cola.push('totp-challenge')
+    // Coordinador Territorial sin 2FA: si el dispositivo no es el enrolado, primero hay que
+    // enrolarlo (PW-01). Superadministrador/Administrador quedan para la Etapa 2FA vía OTP.
+    if (!requiere2FA(user.rol) && dispositivosEnrolados[user.id] !== idDeEsteDispositivo()) {
+      setDispositivoPendiente({ userId: user.id })
+      return { ok: true }
     }
-    setColaPendiente(cola)
-    avanzarCola(cola, user.id)
+
+    crearSesion(user.id)
     return { ok: true }
+  }
+
+  function confirmarEnrolamiento() {
+    if (!dispositivoPendiente) return
+    setDispositivosEnrolados((prev) => ({ ...prev, [dispositivoPendiente.userId]: idDeEsteDispositivo() }))
+    crearSesion(dispositivoPendiente.userId)
+  }
+
+  function desbloquearComoAdminDemo(cedula: string) {
+    const user = usuarios.find((u) => u.cedula === cedula.trim())
+    if (!user) return
+    setBloqueos((prev) => {
+      const resto = { ...prev }
+      delete resto[user.id]
+      return resto
+    })
   }
 
   function confirmarTotpSetup(codigo: string): ResultadoCodigo {
@@ -259,6 +318,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function reenviarCodigoWhatsapp() {
     if (!pendiente || pendiente.tipo !== 'whatsapp-verify') return
     setPendiente({ ...pendiente, codigo: generarCodigo(), expiraEn: Date.now() + DURACION_CODIGO_MS })
+  }
+
+  // No revierte pasos ya confirmados (confirmarTotpSetup/confirmarWhatsapp ya persisten el
+  // suyo al momento de confirmarse, antes de avanzar la cola) — solo corta el paso en curso
+  // y lo que quedaba pendiente, devolviendo a LoginPage al formulario plano.
+  function cancelarPendiente() {
+    setColaPendiente([])
+    setPendiente(null)
+    setDispositivoPendiente(null)
   }
 
   function confirmarWhatsapp(codigo: string): ResultadoCodigo {
@@ -325,14 +393,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function restablecerContrasena(nueva: string): ResultadoCodigo {
     if (!recuperacion?.verificado) return { ok: false, mensaje: 'Verifica el código primero.' }
     actualizarUsuario(recuperacion.userId, { password: nueva })
-    setBloqueos((prev) => ({ ...prev, [recuperacion.userId]: { intentos: 0, bloqueadoHasta: null } }))
+    setBloqueos((prev) => {
+      const resto = { ...prev }
+      delete resto[recuperacion.userId]
+      return resto
+    })
     setRecuperacion(null)
     return { ok: true }
   }
 
-  function estaBloqueado(email: string): number | null {
-    const correo = email.trim().toLowerCase()
-    const user = usuarios.find((u) => u.email.toLowerCase() === correo)
+  function estaBloqueado(cedula: string): number | null {
+    const user = usuarios.find((u) => u.cedula === cedula.trim())
     if (!user) return null
     const b = bloqueos[user.id]
     return b?.bloqueadoHasta && b.bloqueadoHasta > Date.now() ? b.bloqueadoHasta : null
@@ -343,19 +414,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sesion,
     usuarioActual,
     pendiente,
+    dispositivoPendiente,
     motivoSalida,
     recuperacion,
     login,
+    confirmarEnrolamiento,
     confirmarTotpSetup,
     confirmarWhatsapp,
     confirmarTotpChallenge,
     reenviarCodigoWhatsapp,
+    cancelarPendiente,
     cerrarSesion,
     limpiarMotivoSalida,
     solicitarRecuperacion,
     confirmarCodigoRecuperacion,
     restablecerContrasena,
     estaBloqueado,
+    desbloquearComoAdminDemo,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

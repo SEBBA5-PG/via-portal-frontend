@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import logo from '../assets/via-logo.png'
+import { ViaLogo } from './ViaLogo'
 import { useAuth } from '../state/authStore'
 import { ROLES } from '../data/roles'
 import { categoriasVisiblesPara } from '../data/matrizAcceso'
@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen flex bg-institucional">
       <aside className="w-64 shrink-0 bg-institucional-sidebar px-4 py-6 flex flex-col gap-6">
-        <img src={logo} alt="VIA" className="h-10 w-auto mx-auto" />
+        <ViaLogo className="h-10 mx-auto" />
         <nav className="flex-1 flex flex-col gap-1 overflow-y-auto">
           <NavLink to="/home" className={claseLink}>
             Home

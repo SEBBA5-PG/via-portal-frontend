@@ -70,6 +70,7 @@ export function RecoveryPage() {
           <TextField
             etiqueta="Nueva contraseña"
             type="password"
+            autoComplete="new-password"
             value={nueva}
             onChange={(e) => setNueva(e.target.value)}
             required
@@ -77,6 +78,7 @@ export function RecoveryPage() {
           <TextField
             etiqueta="Confirmar contraseña"
             type="password"
+            autoComplete="new-password"
             value={confirmacion}
             onChange={(e) => setConfirmacion(e.target.value)}
             required
@@ -84,6 +86,11 @@ export function RecoveryPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit">Guardar contraseña</Button>
         </form>
+        <div className="mt-4 text-center">
+          <Link to="/login" className="text-sm text-cafe-muted underline">
+            Cancelar
+          </Link>
+        </div>
       </AuthLayout>
     )
   }
@@ -107,6 +114,14 @@ export function RecoveryPage() {
               Verificar código
             </Button>
           </form>
+          <div className="flex justify-center gap-4">
+            <button onClick={() => setPaso('solicitar')} className="text-sm text-cafe-muted underline">
+              Volver
+            </button>
+            <Link to="/login" className="text-sm text-cafe-muted underline">
+              Cancelar
+            </Link>
+          </div>
         </div>
       </AuthLayout>
     )
@@ -115,7 +130,15 @@ export function RecoveryPage() {
   return (
     <AuthLayout titulo="Recuperar acceso" subtitulo="Te enviaremos un código temporal por WhatsApp">
       <form onSubmit={solicitar} className="flex flex-col gap-4">
-        <TextField etiqueta="Correo" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <TextField
+          etiqueta="Correo"
+          type="email"
+          placeholder="nombre@via.com"
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
         {error && <p className="text-sm text-red-600">{error}</p>}
         <Button type="submit">Enviar código</Button>
       </form>

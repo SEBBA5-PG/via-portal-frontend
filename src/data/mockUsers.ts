@@ -4,10 +4,14 @@ import type { Rol } from './roles'
 export interface DemoUser {
   id: string
   nombre: string
-  email: string
-  password: string
+  cedula: string
+  pin: string
   rol: Rol
+  email: string
   telefonoWhatsapp: string
+  // Legacy de la etapa de recuperación anterior (password por correo) — se reemplaza cuando
+  // esa pantalla se rediseñe a cédula + OTP por WhatsApp (con correo de respaldo).
+  password: string
   totpSecret: string | null
   totpConfigurado: boolean
   whatsappVerificado: boolean
@@ -17,10 +21,12 @@ export const SEED_USERS: DemoUser[] = [
   {
     id: 'u-superadmin',
     nombre: 'María Fernanda Rojas',
-    email: 'maria.rojas@demo.via',
-    password: 'Demo#2026S',
+    cedula: '1000000001',
+    pin: '1234',
     rol: 'S',
+    email: 'maria.rojas@demo.via',
     telefonoWhatsapp: '+57 300 111 2233',
+    password: 'Demo#2026S',
     totpSecret: null,
     totpConfigurado: false,
     whatsappVerificado: false,
@@ -28,10 +34,12 @@ export const SEED_USERS: DemoUser[] = [
   {
     id: 'u-admin',
     nombre: 'Andrés Camilo Pérez',
-    email: 'andres.perez@demo.via',
-    password: 'Demo#2026A',
+    cedula: '1000000002',
+    pin: '2345',
     rol: 'A',
+    email: 'andres.perez@demo.via',
     telefonoWhatsapp: '+57 300 222 3344',
+    password: 'Demo#2026A',
     totpSecret: null,
     totpConfigurado: false,
     whatsappVerificado: false,
@@ -39,21 +47,12 @@ export const SEED_USERS: DemoUser[] = [
   {
     id: 'u-coordinador',
     nombre: 'Laura Medina',
-    email: 'laura.medina@demo.via',
-    password: 'Demo#2026C',
+    cedula: '1000000003',
+    pin: '3456',
     rol: 'C',
+    email: 'laura.medina@demo.via',
     telefonoWhatsapp: '+57 300 333 4455',
-    totpSecret: null,
-    totpConfigurado: false,
-    whatsappVerificado: false,
-  },
-  {
-    id: 'u-operador',
-    nombre: 'Jorge Salazar',
-    email: 'jorge.salazar@demo.via',
-    password: 'Demo#2026O',
-    rol: 'O',
-    telefonoWhatsapp: '+57 300 444 5566',
+    password: 'Demo#2026C',
     totpSecret: null,
     totpConfigurado: false,
     whatsappVerificado: false,
