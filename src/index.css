@@ -31,6 +31,22 @@
   --radius-card: 24px;
   --radius-panel: 30px;
   --radius-pill: 999px;
+
+  /*
+    Línea ejecutiva del login (2026-09-11). Paleta PROVISIONAL para el portal como CRM
+    independiente de la app: no es canon ni vive en Constantes del Sistema de VIA BRAIN.
+    Estructura y medidas tomadas del "CRM UI Kit for SaaS Dashboards" (Figma, nodo 9077:792).
+    El resto del portal (AppShell, Home) sigue con los tokens de arriba hasta su rediseño.
+  */
+  --color-marino: #14213d;
+  --color-primario: #1f3a68;
+  --color-ambar: #e0a526;
+  --color-grafito: #1c1d21;
+  --color-texto-suave: #6b7088;
+  --color-borde: #e6e8ef;
+  --color-fondo: #ffffff;
+
+  --radius-control: 10px;
 }
 
 :root {

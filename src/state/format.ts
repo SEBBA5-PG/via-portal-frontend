@@ -4,3 +4,8 @@ export function enmascararTelefono(tel: string): string {
   const digitos = tel.replace(/\D/g, '')
   return `•••• ${digitos.slice(-2)}`
 }
+
+// Cédula en pantalla: solo los últimos 4 dígitos, mismo criterio de PII enmascarada.
+export function enmascararCedula(cedula: string): string {
+  return `•••• ${cedula.slice(-4)}`
+}

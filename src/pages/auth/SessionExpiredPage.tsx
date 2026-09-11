@@ -5,10 +5,14 @@ import { Button } from '../../components/ui/Button'
 export function SessionExpiredPage() {
   const navigate = useNavigate()
   return (
-    <AuthLayout titulo="Tu sesión expiró" subtitulo="Por tu seguridad, cerramos tu sesión por inactividad">
-      <Button className="w-full" onClick={() => navigate('/login', { replace: true })}>
-        Volver a iniciar sesión
-      </Button>
-    </AuthLayout>
+    <AuthLayout
+      titulo="Tu sesión expiró"
+      subtitulo="Por tu seguridad, cerramos tu sesión por inactividad."
+      acciones={
+        <Button variante="ejecutivo" className="w-full" onClick={() => navigate('/login', { replace: true })}>
+          Volver a iniciar sesión
+        </Button>
+      }
+    />
   )
 }

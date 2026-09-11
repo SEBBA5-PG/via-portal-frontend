@@ -13,9 +13,18 @@ import {
 } from './storage'
 import { generarSecretoTotp, verificarCodigoTotp } from './totp'
 
-// PW-01 §6/7: duración de sesión de S/A sigue DIFERIDA a desarrollo — valor de trabajo para
-// el demo. Coordinador Territorial sí tiene decisión de producto: turno de 10h (PW-01,
-// 2026-09-11). Operador Logístico salió del portal — ya no tiene entrada aquí.
+// PW-01, 2026-09-11: PIN de 6 dígitos (decisión borrador, validada primero en este demo).
+export const LONGITUD_PIN = 6
+// wiki/Registro, Autenticación y Recuperación: OTP de 6 dígitos con 3 minutos de validez y
+// antiabuso de 3 solicitudes cada 15 minutos.
+export const LONGITUD_CODIGO = 6
+const DURACION_CODIGO_MS = 3 * 60 * 1000
+const MAX_SOLICITUDES_CODIGO = 3
+const VENTANA_SOLICITUDES_MS = 15 * 60 * 1000
+
+// PW-01, Preguntas abiertas: la duración de sesión de S/A sigue DIFERIDA a desarrollo — valor
+// de trabajo para el demo. Coordinador Territorial sí tiene decisión de producto: turno de 10h
+// (PW-01, 2026-09-11). Operador Logístico salió del portal — ya no tiene entrada aquí.
 const DURACION_SESION_MS: Record<Rol, number> = {
   S: 8 * 60 * 60 * 1000,
   A: 8 * 60 * 60 * 1000,
@@ -25,7 +34,10 @@ const DURACION_SESION_MS: Record<Rol, number> = {
 // los intentos de nuevo tras ese bloqueo, escala a bloqueo duro (desbloqueo manual).
 const DURACION_BLOQUEO_MS = 15 * 60 * 1000
 const INTENTOS_MAXIMOS = 3
-const DURACION_CODIGO_MS = 5 * 60 * 1000
+// Valor de trabajo, no decidido en VIA BRAIN: 3 fallos al confirmar los 2 últimos dígitos del
+// celular pausan la recuperación de esa cuenta 15 minutos (mismos números que el bloqueo de PIN).
+const FALLOS_DIGITOS_MAXIMOS = 3
+const PAUSA_RECUPERACION_MS = 15 * 60 * 1000
 const DURACION_DISPOSITIVO_CONFIADO_MS = 30 * 24 * 60 * 60 * 1000
 
 interface Sesion {
@@ -40,7 +52,7 @@ interface RegistroBloqueo {
   // true desde el primer bloqueo temporal — si se agotan los intentos otra vez, escala a duro.
   huboBloqueoPrevio: boolean
   // Bloqueo duro (PW-01): sin auto-expiración, requiere desbloqueo manual de un
-  // Administrador/Superadministrador. En este demo, ese desbloqueo lo simula `desbloquear()`.
+  // Administrador/Superadministrador. En este demo, ese desbloqueo lo simula `desbloquearComoAdminDemo()`.
   duro: boolean
 }
 
@@ -56,23 +68,43 @@ type Pendiente =
   | { tipo: 'whatsapp-verify'; userId: string; codigo: string; expiraEn: number }
   | { tipo: 'totp-challenge'; userId: string }
 
+// Recuperación de PIN (PW-01): cédula → 2 últimos dígitos del celular → OTP por WhatsApp →
+// PIN nuevo. El número nunca se muestra: la persona demuestra que lo conoce.
 interface Recuperacion {
   userId: string
-  codigo: string
-  expiraEn: number
-  verificado: boolean
+  etapa: 'digitos' | 'codigo' | 'pin'
+  codigo: string | null
+  expiraEn: number | null
+}
+
+interface LimiteRecuperacion {
+  // Marcas de tiempo de los códigos emitidos, para el antiabuso.
+  solicitudes: number[]
+  fallosDigitos: number
+  pausadaHasta: number | null
 }
 
 type ResultadoLogin =
   | { ok: true }
+  | { ok: false; tipo: 'sin-cuenta'; mensaje: string }
   | { ok: false; tipo: 'credenciales'; mensaje: string }
   | { ok: false; tipo: 'bloqueado'; hasta: number }
   | { ok: false; tipo: 'bloqueado-duro' }
 
 type ResultadoCodigo = { ok: true } | { ok: false; mensaje: string }
 
+type ResultadoPin = { ok: true; sigueBloqueadoDuro: boolean } | { ok: false; mensaje: string }
+
 function generarCodigo(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
+function intentosRestantes(restantes: number): string {
+  return `Te queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`
+}
+
+function minutosHasta(momento: number): number {
+  return Math.max(1, Math.ceil((momento - Date.now()) / 60_000))
 }
 
 interface AuthContextValue {
@@ -94,9 +126,12 @@ interface AuthContextValue {
   cancelarPendiente: () => void
   cerrarSesion: () => void
   limpiarMotivoSalida: () => void
-  solicitarRecuperacion: (email: string) => ResultadoCodigo
+  iniciarRecuperacion: (cedula: string) => ResultadoCodigo
+  confirmarUltimosDigitos: (digitos: string) => ResultadoCodigo
+  reenviarCodigoRecuperacion: () => ResultadoCodigo
   confirmarCodigoRecuperacion: (codigo: string) => ResultadoCodigo
-  restablecerContrasena: (nueva: string) => ResultadoCodigo
+  restablecerPin: (nuevo: string) => ResultadoPin
+  cancelarRecuperacion: () => void
   estaBloqueado: (cedula: string) => number | null
   // Demo únicamente: en producción el bloqueo duro lo levanta un Administrador desde la
   // ficha del usuario (PW-03), no la propia persona bloqueada.
@@ -106,14 +141,16 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [usuarios, setUsuarios] = useState<DemoUser[]>(() => leerJSON('users', SEED_USERS))
+  // Claves `:v2` desde el PIN de 6 dígitos: un navegador que ya abrió el demo tendría guardadas
+  // las cuentas con el PIN viejo de 4 y no podría entrar.
+  const [usuarios, setUsuarios] = useState<DemoUser[]>(() => leerJSON('users:v2', SEED_USERS))
   const [sesion, setSesion] = useState<Sesion | null>(() => {
     const miUserId = leerIdDeSesionDeEstaPestana()
     if (!miUserId) return null
     const compartida = leerJSON<Sesion | null>(`session:${miUserId}`, null)
     return compartida && compartida.expiraEn > Date.now() ? compartida : null
   })
-  const [bloqueos, setBloqueos] = useState<Record<string, RegistroBloqueo>>(() => leerJSON('lockouts', {}))
+  const [bloqueos, setBloqueos] = useState<Record<string, RegistroBloqueo>>(() => leerJSON('lockouts:v2', {}))
   const [confianzas, setConfianzas] = useState<Record<string, ConfianzaDispositivo>>(() =>
     leerJSON('deviceTrust', {}),
   )
@@ -122,22 +159,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [dispositivosEnrolados, setDispositivosEnrolados] = useState<Record<string, string>>(() =>
     leerJSON('enrolledDevices', {}),
   )
+  const [limites, setLimites] = useState<Record<string, LimiteRecuperacion>>(() => leerJSON('recoveryLimits', {}))
   const [dispositivoPendiente, setDispositivoPendiente] = useState<{ userId: string } | null>(null)
   const [colaPendiente, setColaPendiente] = useState<Paso[]>([])
   const [pendiente, setPendiente] = useState<Pendiente | null>(null)
   const [motivoSalida, setMotivoSalida] = useState<'expirada' | 'otro-dispositivo' | null>(null)
   const [recuperacion, setRecuperacion] = useState<Recuperacion | null>(null)
 
-  useEffect(() => escribirJSON('users', usuarios), [usuarios])
-  useEffect(() => escribirJSON('lockouts', bloqueos), [bloqueos])
+  useEffect(() => escribirJSON('users:v2', usuarios), [usuarios])
+  useEffect(() => escribirJSON('lockouts:v2', bloqueos), [bloqueos])
   useEffect(() => escribirJSON('deviceTrust', confianzas), [confianzas])
   useEffect(() => escribirJSON('enrolledDevices', dispositivosEnrolados), [dispositivosEnrolados])
+  useEffect(() => escribirJSON('recoveryLimits', limites), [limites])
 
-  // Sesión única PERO por cuenta (PW-01 §9), no por navegador: cada cuenta tiene su propia
-  // llave `session:<userId>` en localStorage (compartida entre pestañas). Qué cuenta muestra
-  // ESTA pestaña vive en sessionStorage (no se comparte) — así dos cuentas distintas pueden
-  // convivir en dos pestañas del mismo navegador, y solo se cierra la pestaña cuya MISMA
-  // cuenta acaba de iniciar sesión en otro lugar.
+  // Sesión única PERO por cuenta (PW-01, Sesión única por usuario), no por navegador: cada
+  // cuenta tiene su propia llave `session:<userId>` en localStorage (compartida entre pestañas).
+  // Qué cuenta muestra ESTA pestaña vive en sessionStorage (no se comparte) — así dos cuentas
+  // distintas pueden convivir en dos pestañas del mismo navegador, y solo se cierra la pestaña
+  // cuya MISMA cuenta acaba de iniciar sesión en otro lugar.
   useEffect(() => {
     function alCambiarStorage(e: StorageEvent) {
       if (!e.key?.startsWith(claveCompleta('session:'))) return
@@ -160,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('storage', alCambiarStorage)
   }, [])
 
-  // Expiración de sesión (PW-01 §6): revisa cada 15s sin forzar renders innecesarios.
+  // Expiración de sesión: revisa cada 15s sin forzar renders innecesarios.
   useEffect(() => {
     const id = setInterval(() => {
       setSesion((actual) => {
@@ -236,7 +275,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cc = cedula.trim()
     const user = usuarios.find((u) => u.cedula === cc)
     if (!user) {
-      return { ok: false, tipo: 'credenciales', mensaje: 'No encontramos una cuenta con esa cédula.' }
+      return { ok: false, tipo: 'sin-cuenta', mensaje: 'No encontramos una cuenta con esa cédula.' }
     }
     const bloqueo = bloqueos[user.id]
     if (bloqueo?.duro) {
@@ -266,11 +305,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...prev,
         [user.id]: { intentos, bloqueadoHasta: null, huboBloqueoPrevio: bloqueo?.huboBloqueoPrevio ?? false, duro: false },
       }))
-      const restantes = INTENTOS_MAXIMOS - intentos
       return {
         ok: false,
         tipo: 'credenciales',
-        mensaje: `PIN incorrecto. Te queda${restantes === 1 ? '' : 'n'} ${restantes} intento${restantes === 1 ? '' : 's'}.`,
+        mensaje: `PIN incorrecto. ${intentosRestantes(INTENTOS_MAXIMOS - intentos)}`,
       }
     }
 
@@ -369,37 +407,110 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMotivoSalida(null)
   }
 
-  function solicitarRecuperacion(email: string): ResultadoCodigo {
-    const correo = email.trim().toLowerCase()
-    const user = usuarios.find((u) => u.email.toLowerCase() === correo)
-    if (!user) return { ok: false, mensaje: 'No encontramos una cuenta con ese correo.' }
-    setRecuperacion({
-      userId: user.id,
-      codigo: generarCodigo(),
-      expiraEn: Date.now() + DURACION_CODIGO_MS,
-      verificado: false,
-    })
+  function limiteDe(userId: string): LimiteRecuperacion {
+    return limites[userId] ?? { solicitudes: [], fallosDigitos: 0, pausadaHasta: null }
+  }
+
+  function mensajePausa(hasta: number): string {
+    return `Por seguridad, la recuperación de esta cuenta está en pausa. Intenta de nuevo en ${minutosHasta(hasta)} min.`
+  }
+
+  function iniciarRecuperacion(cedula: string): ResultadoCodigo {
+    const user = usuarios.find((u) => u.cedula === cedula.trim())
+    if (!user) return { ok: false, mensaje: 'No encontramos una cuenta con esa cédula.' }
+    const { pausadaHasta } = limiteDe(user.id)
+    if (pausadaHasta && pausadaHasta > Date.now()) return { ok: false, mensaje: mensajePausa(pausadaHasta) }
+    setRecuperacion({ userId: user.id, etapa: 'digitos', codigo: null, expiraEn: null })
     return { ok: true }
+  }
+
+  // Emite o reemite el OTP respetando el antiabuso (3 solicitudes cada 15 min por cuenta).
+  function emitirCodigo(userId: string, fallosDigitos: number): ResultadoCodigo {
+    const ahora = Date.now()
+    const limite = limiteDe(userId)
+    const recientes = limite.solicitudes.filter((t) => ahora - t < VENTANA_SOLICITUDES_MS)
+    if (recientes.length >= MAX_SOLICITUDES_CODIGO) {
+      return {
+        ok: false,
+        mensaje: `Ya pediste ${MAX_SOLICITUDES_CODIGO} códigos en los últimos 15 minutos. Podrás pedir otro en ${minutosHasta(recientes[0] + VENTANA_SOLICITUDES_MS)} min.`,
+      }
+    }
+    setLimites((prev) => ({ ...prev, [userId]: { ...limite, fallosDigitos, solicitudes: [...recientes, ahora] } }))
+    setRecuperacion({ userId, etapa: 'codigo', codigo: generarCodigo(), expiraEn: ahora + DURACION_CODIGO_MS })
+    return { ok: true }
+  }
+
+  function confirmarUltimosDigitos(digitos: string): ResultadoCodigo {
+    if (!recuperacion || recuperacion.etapa !== 'digitos') return { ok: false, mensaje: 'Paso inválido.' }
+    const user = usuarios.find((u) => u.id === recuperacion.userId)
+    if (!user) return { ok: false, mensaje: 'Paso inválido.' }
+    const limite = limiteDe(user.id)
+    if (limite.pausadaHasta && limite.pausadaHasta > Date.now()) {
+      setRecuperacion(null)
+      return { ok: false, mensaje: mensajePausa(limite.pausadaHasta) }
+    }
+    if (digitos !== user.telefonoWhatsapp.replace(/\D/g, '').slice(-2)) {
+      const fallos = limite.fallosDigitos + 1
+      if (fallos >= FALLOS_DIGITOS_MAXIMOS) {
+        setLimites((prev) => ({
+          ...prev,
+          [user.id]: { ...limite, fallosDigitos: 0, pausadaHasta: Date.now() + PAUSA_RECUPERACION_MS },
+        }))
+        setRecuperacion(null)
+        return {
+          ok: false,
+          mensaje: 'Los dígitos no coinciden. Por seguridad, pausamos la recuperación de esta cuenta durante 15 minutos.',
+        }
+      }
+      setLimites((prev) => ({ ...prev, [user.id]: { ...limite, fallosDigitos: fallos } }))
+      return {
+        ok: false,
+        mensaje: `Los dígitos no coinciden con el celular registrado. ${intentosRestantes(FALLOS_DIGITOS_MAXIMOS - fallos)}`,
+      }
+    }
+    return emitirCodigo(user.id, 0)
+  }
+
+  function reenviarCodigoRecuperacion(): ResultadoCodigo {
+    if (!recuperacion || recuperacion.etapa !== 'codigo') return { ok: false, mensaje: 'Paso inválido.' }
+    return emitirCodigo(recuperacion.userId, limiteDe(recuperacion.userId).fallosDigitos)
   }
 
   function confirmarCodigoRecuperacion(codigo: string): ResultadoCodigo {
-    if (!recuperacion) return { ok: false, mensaje: 'Solicita el código de nuevo.' }
-    if (Date.now() > recuperacion.expiraEn) return { ok: false, mensaje: 'El código expiró, pide uno nuevo.' }
-    if (recuperacion.codigo !== codigo) return { ok: false, mensaje: 'Código incorrecto.' }
-    setRecuperacion({ ...recuperacion, verificado: true })
+    if (!recuperacion || recuperacion.etapa !== 'codigo' || !recuperacion.codigo || !recuperacion.expiraEn) {
+      return { ok: false, mensaje: 'Solicita el código de nuevo.' }
+    }
+    if (Date.now() > recuperacion.expiraEn) return { ok: false, mensaje: 'El código venció. Pide uno nuevo.' }
+    if (recuperacion.codigo !== codigo) {
+      return { ok: false, mensaje: 'El código no es correcto. Revísalo e inténtalo de nuevo.' }
+    }
+    setRecuperacion({ ...recuperacion, etapa: 'pin', codigo: null, expiraEn: null })
     return { ok: true }
   }
 
-  function restablecerContrasena(nueva: string): ResultadoCodigo {
-    if (!recuperacion?.verificado) return { ok: false, mensaje: 'Verifica el código primero.' }
-    actualizarUsuario(recuperacion.userId, { password: nueva })
-    setBloqueos((prev) => {
-      const resto = { ...prev }
-      delete resto[recuperacion.userId]
-      return resto
-    })
+  function restablecerPin(nuevo: string): ResultadoPin {
+    if (!recuperacion || recuperacion.etapa !== 'pin') return { ok: false, mensaje: 'Verifica el código primero.' }
+    if (!new RegExp(`^\\d{${LONGITUD_PIN}}$`).test(nuevo)) {
+      return { ok: false, mensaje: `El PIN debe tener ${LONGITUD_PIN} dígitos.` }
+    }
+    const { userId } = recuperacion
+    actualizarUsuario(userId, { pin: nuevo })
+    // Recuperar el PIN levanta el bloqueo temporal, pero NO el duro: ese exige revisión manual
+    // de un Administrador/Superadministrador (PW-01). Antes este paso borraba el registro entero.
+    const sigueBloqueadoDuro = bloqueos[userId]?.duro ?? false
+    if (!sigueBloqueadoDuro) {
+      setBloqueos((prev) => {
+        const resto = { ...prev }
+        delete resto[userId]
+        return resto
+      })
+    }
     setRecuperacion(null)
-    return { ok: true }
+    return { ok: true, sigueBloqueadoDuro }
+  }
+
+  function cancelarRecuperacion() {
+    setRecuperacion(null)
   }
 
   function estaBloqueado(cedula: string): number | null {
@@ -426,9 +537,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     cancelarPendiente,
     cerrarSesion,
     limpiarMotivoSalida,
-    solicitarRecuperacion,
+    iniciarRecuperacion,
+    confirmarUltimosDigitos,
+    reenviarCodigoRecuperacion,
     confirmarCodigoRecuperacion,
-    restablecerContrasena,
+    restablecerPin,
+    cancelarRecuperacion,
     estaBloqueado,
     desbloquearComoAdminDemo,
   }

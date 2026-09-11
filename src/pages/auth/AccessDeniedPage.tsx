@@ -10,14 +10,16 @@ export function AccessDeniedPage() {
   return (
     <AuthLayout
       titulo="No tienes permiso"
-      subtitulo={categoria ? `Tu rol no tiene acceso a "${categoria}"` : 'Tu rol no alcanza esta sección'}
+      subtitulo={categoria ? `Tu rol no tiene acceso a "${categoria}".` : 'Tu rol no alcanza esta sección.'}
+      acciones={
+        <Button variante="ejecutivo" className="w-full" onClick={() => navigate('/home')}>
+          Volver al inicio
+        </Button>
+      }
     >
-      <p className="mb-4 text-center text-sm text-cafe-muted">
+      <p className="text-sm leading-6 text-grafito">
         Si necesitas entrar aquí, pídele a un Superadministrador que revise tus permisos.
       </p>
-      <Button className="w-full" onClick={() => navigate('/home')}>
-        Volver al inicio
-      </Button>
     </AuthLayout>
   )
 }

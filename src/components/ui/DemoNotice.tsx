@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 
 export function DemoNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-acento/60 bg-acento/10 px-4 py-3 text-sm text-cafe">
-      <p className="font-heading font-bold mb-1 text-xs uppercase tracking-wide">Modo demo</p>
+    <div className="rounded-control border border-dashed border-ambar bg-ambar/10 px-4 py-3 text-sm text-grafito">
+      <p className="mb-1 font-heading text-[11px] font-bold uppercase tracking-wider text-grafito/70">Modo demo</p>
       <div>{children}</div>
     </div>
   )
