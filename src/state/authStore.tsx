@@ -11,16 +11,21 @@ import {
   leerIdDeSesionDeEstaPestana,
   leerJSON,
 } from './storage'
-import { generarSecretoTotp, verificarCodigoTotp } from './totp'
 
 // PW-01, 2026-09-11: PIN de 6 dígitos (decisión borrador, validada primero en este demo).
 export const LONGITUD_PIN = 6
-// wiki/Registro, Autenticación y Recuperación: OTP de 6 dígitos con 3 minutos de validez y
-// antiabuso de 3 solicitudes cada 15 minutos.
+// wiki/Registro, Autenticación y Recuperación: OTP de 6 dígitos por WhatsApp con 3 minutos de
+// validez. Antiabuso por número celular: al superar 3 solicitudes en 15 minutos, ese número queda
+// bloqueado 1 hora. Lo comparten el desafío 2FA y la recuperación de PIN (es el mismo celular).
 export const LONGITUD_CODIGO = 6
 const DURACION_CODIGO_MS = 3 * 60 * 1000
 const MAX_SOLICITUDES_CODIGO = 3
 const VENTANA_SOLICITUDES_MS = 15 * 60 * 1000
+const BLOQUEO_NUMERO_MS = 60 * 60 * 1000
+// Valor de trabajo, no decidido en VIA BRAIN: 3 códigos errados anulan el código vigente y hay que
+// pedir otro (que cuenta para el antiabuso). Sin tope, un código de 6 dígitos admitiría intentos
+// ilimitados durante sus 3 minutos.
+const FALLOS_CODIGO_MAXIMOS = 3
 
 // PW-01, Preguntas abiertas: la duración de sesión de S/A sigue DIFERIDA a desarrollo — valor
 // de trabajo para el demo. Coordinador Territorial sí tiene decisión de producto: turno de 10h
@@ -38,7 +43,6 @@ const INTENTOS_MAXIMOS = 3
 // celular pausan la recuperación de esa cuenta 15 minutos (mismos números que el bloqueo de PIN).
 const FALLOS_DIGITOS_MAXIMOS = 3
 const PAUSA_RECUPERACION_MS = 15 * 60 * 1000
-const DURACION_DISPOSITIVO_CONFIADO_MS = 30 * 24 * 60 * 60 * 1000
 
 interface Sesion {
   userId: string
@@ -56,44 +60,52 @@ interface RegistroBloqueo {
   duro: boolean
 }
 
-interface ConfianzaDispositivo {
-  deviceId: string
-  expiraEn: number
+// Un código OTP en curso. `codigo` y `expiraEn` quedan en null cuando se anula por fallos.
+interface CodigoEnCurso {
+  codigo: string | null
+  expiraEn: number | null
+  fallos: number
 }
 
-type Paso = 'totp-setup' | 'whatsapp-verify' | 'totp-challenge'
-
-type Pendiente =
-  | { tipo: 'totp-setup'; userId: string; base32: string; otpauthUri: string }
-  | { tipo: 'whatsapp-verify'; userId: string; codigo: string; expiraEn: number }
-  | { tipo: 'totp-challenge'; userId: string }
+// PW-01, Mecanismo de 2FA: tras el PIN correcto, Superadministrador y Administrador pasan por un
+// único desafío OTP vía WhatsApp, en cada login — sin app autenticadora ni "recordar dispositivo".
+interface DesafioOtp extends CodigoEnCurso {
+  userId: string
+}
 
 // Recuperación de PIN (PW-01): cédula → 2 últimos dígitos del celular → OTP por WhatsApp →
 // PIN nuevo. El número nunca se muestra: la persona demuestra que lo conoce.
-interface Recuperacion {
+interface Recuperacion extends CodigoEnCurso {
   userId: string
   etapa: 'digitos' | 'codigo' | 'pin'
-  codigo: string | null
-  expiraEn: number | null
 }
 
 interface LimiteRecuperacion {
-  // Marcas de tiempo de los códigos emitidos, para el antiabuso.
-  solicitudes: number[]
   fallosDigitos: number
   pausadaHasta: number | null
+}
+
+interface EnviosNumero {
+  // Marcas de tiempo de los códigos emitidos a ese número, para el antiabuso.
+  solicitudes: number[]
+  bloqueadoHasta: number | null
 }
 
 type ResultadoLogin =
   | { ok: true }
   | { ok: false; tipo: 'sin-cuenta'; mensaje: string }
   | { ok: false; tipo: 'credenciales'; mensaje: string }
+  | { ok: false; tipo: 'codigo'; mensaje: string }
   | { ok: false; tipo: 'bloqueado'; hasta: number }
   | { ok: false; tipo: 'bloqueado-duro' }
 
 type ResultadoCodigo = { ok: true } | { ok: false; mensaje: string }
 
 type ResultadoPin = { ok: true; sigueBloqueadoDuro: boolean } | { ok: false; mensaje: string }
+
+type CodigoEmitido = { ok: true; codigo: string; expiraEn: number } | { ok: false; mensaje: string }
+
+type EvaluacionCodigo = { ok: true } | { ok: false; mensaje: string; cambios: Partial<CodigoEnCurso> }
 
 function generarCodigo(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
@@ -107,11 +119,37 @@ function minutosHasta(momento: number): number {
   return Math.max(1, Math.ceil((momento - Date.now()) / 60_000))
 }
 
+function numeroDe(user: DemoUser): string {
+  return user.telefonoWhatsapp.replace(/\D/g, '')
+}
+
+// Misma regla para el desafío 2FA y la recuperación: vencido, correcto, errado o anulado.
+function evaluarCodigo(enCurso: CodigoEnCurso, codigo: string): EvaluacionCodigo {
+  if (!enCurso.codigo || !enCurso.expiraEn) {
+    return { ok: false, mensaje: 'Este código ya no es válido. Pide uno nuevo.', cambios: {} }
+  }
+  if (Date.now() > enCurso.expiraEn) return { ok: false, mensaje: 'El código venció. Pide uno nuevo.', cambios: {} }
+  if (enCurso.codigo === codigo) return { ok: true }
+  const fallos = enCurso.fallos + 1
+  if (fallos >= FALLOS_CODIGO_MAXIMOS) {
+    return {
+      ok: false,
+      mensaje: `Escribiste un código incorrecto ${FALLOS_CODIGO_MAXIMOS} veces. Por seguridad lo anulamos: pide uno nuevo.`,
+      cambios: { fallos, codigo: null, expiraEn: null },
+    }
+  }
+  return {
+    ok: false,
+    mensaje: `El código no es correcto. ${intentosRestantes(FALLOS_CODIGO_MAXIMOS - fallos)}`,
+    cambios: { fallos },
+  }
+}
+
 interface AuthContextValue {
   usuarios: DemoUser[]
   sesion: Sesion | null
   usuarioActual: DemoUser | null
-  pendiente: Pendiente | null
+  desafio2FA: DesafioOtp | null
   // PW-01: Coordinador Territorial, primer acceso desde un dispositivo nuevo — antes de
   // crear sesión, hay que enrolarlo (un solo dispositivo activo por cuenta).
   dispositivoPendiente: { userId: string } | null
@@ -119,10 +157,8 @@ interface AuthContextValue {
   recuperacion: Recuperacion | null
   login: (cedula: string, pin: string) => ResultadoLogin
   confirmarEnrolamiento: () => void
-  confirmarTotpSetup: (codigo: string) => ResultadoCodigo
-  confirmarWhatsapp: (codigo: string) => ResultadoCodigo
-  confirmarTotpChallenge: (codigo: string, recordarDispositivo: boolean) => ResultadoCodigo
-  reenviarCodigoWhatsapp: () => void
+  confirmarCodigo2FA: (codigo: string) => ResultadoCodigo
+  reenviarCodigo2FA: () => ResultadoCodigo
   cancelarPendiente: () => void
   cerrarSesion: () => void
   limpiarMotivoSalida: () => void
@@ -151,26 +187,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return compartida && compartida.expiraEn > Date.now() ? compartida : null
   })
   const [bloqueos, setBloqueos] = useState<Record<string, RegistroBloqueo>>(() => leerJSON('lockouts:v2', {}))
-  const [confianzas, setConfianzas] = useState<Record<string, ConfianzaDispositivo>>(() =>
-    leerJSON('deviceTrust', {}),
-  )
   // PW-01: un solo dispositivo enrolado por cuenta — enrolar uno nuevo desactiva el anterior.
-  // Distinto de `confianzas` (que solo aplica al desafío OTP de S/A, ver Etapa 2FA).
   const [dispositivosEnrolados, setDispositivosEnrolados] = useState<Record<string, string>>(() =>
     leerJSON('enrolledDevices', {}),
   )
   const [limites, setLimites] = useState<Record<string, LimiteRecuperacion>>(() => leerJSON('recoveryLimits', {}))
+  // Por número celular (sin espacios ni signos), no por cuenta.
+  const [envios, setEnvios] = useState<Record<string, EnviosNumero>>(() => leerJSON('otpSends', {}))
   const [dispositivoPendiente, setDispositivoPendiente] = useState<{ userId: string } | null>(null)
-  const [colaPendiente, setColaPendiente] = useState<Paso[]>([])
-  const [pendiente, setPendiente] = useState<Pendiente | null>(null)
+  const [desafio2FA, setDesafio2FA] = useState<DesafioOtp | null>(null)
   const [motivoSalida, setMotivoSalida] = useState<'expirada' | 'otro-dispositivo' | null>(null)
   const [recuperacion, setRecuperacion] = useState<Recuperacion | null>(null)
 
   useEffect(() => escribirJSON('users:v2', usuarios), [usuarios])
   useEffect(() => escribirJSON('lockouts:v2', bloqueos), [bloqueos])
-  useEffect(() => escribirJSON('deviceTrust', confianzas), [confianzas])
   useEffect(() => escribirJSON('enrolledDevices', dispositivosEnrolados), [dispositivosEnrolados])
   useEffect(() => escribirJSON('recoveryLimits', limites), [limites])
+  useEffect(() => escribirJSON('otpSends', envios), [envios])
 
   // Sesión única PERO por cuenta (PW-01, Sesión única por usuario), no por navegador: cada
   // cuenta tiene su propia llave `session:<userId>` en localStorage (compartida entre pestañas).
@@ -225,10 +258,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUsuarios((prev) => prev.map((u) => (u.id === userId ? { ...u, ...cambios } : u)))
   }
 
-  // `dispositivoConfiado` (recordar dispositivo 30 días para saltar el desafío OTP) se
-  // reincorpora en la Etapa 2FA — por ahora `confianzas` solo se escribe, ver
-  // `confirmarTotpChallenge` más abajo, pendiente de rediseño junto con esa etapa.
-
   function crearSesion(userId: string) {
     const user = usuarios.find((u) => u.id === userId)
     if (!user) return
@@ -240,37 +269,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     escribirJSON(`session:${userId}`, nueva)
     escribirIdDeSesionDeEstaPestana(userId)
     setSesion(nueva)
-    setColaPendiente([])
-    setPendiente(null)
+    setDesafio2FA(null)
     setDispositivoPendiente(null)
   }
 
-  function avanzarCola(cola: Paso[], userId: string) {
-    const user = usuarios.find((u) => u.id === userId)
-    if (!user) return
-    if (cola.length === 0) {
-      crearSesion(userId)
-      return
+  function mensajeNumeroBloqueado(hasta: number): string {
+    return `Superaste el límite de ${MAX_SOLICITUDES_CODIGO} códigos en 15 minutos. Por seguridad, podrás pedir otro en ${minutosHasta(hasta)} min.`
+  }
+
+  // Emite un OTP al celular de la cuenta respetando el antiabuso por número. En el demo el código
+  // no sale del navegador: la pantalla lo muestra en un aviso "Modo demo".
+  function emitirCodigo(user: DemoUser): CodigoEmitido {
+    const numero = numeroDe(user)
+    const ahora = Date.now()
+    const envio = envios[numero] ?? { solicitudes: [], bloqueadoHasta: null }
+    if (envio.bloqueadoHasta && envio.bloqueadoHasta > ahora) {
+      return { ok: false, mensaje: mensajeNumeroBloqueado(envio.bloqueadoHasta) }
     }
-    const paso = cola[0]
-    if (paso === 'totp-setup') {
-      const { base32, otpauthUri } = generarSecretoTotp(user.email)
-      setPendiente({ tipo: 'totp-setup', userId, base32, otpauthUri })
-    } else if (paso === 'whatsapp-verify') {
-      setPendiente({
-        tipo: 'whatsapp-verify',
-        userId,
-        codigo: generarCodigo(),
-        expiraEn: Date.now() + DURACION_CODIGO_MS,
-      })
-    } else {
-      setPendiente({ tipo: 'totp-challenge', userId })
+    const recientes = envio.solicitudes.filter((t) => ahora - t < VENTANA_SOLICITUDES_MS)
+    if (recientes.length >= MAX_SOLICITUDES_CODIGO) {
+      const hasta = ahora + BLOQUEO_NUMERO_MS
+      setEnvios((prev) => ({ ...prev, [numero]: { solicitudes: recientes, bloqueadoHasta: hasta } }))
+      return { ok: false, mensaje: mensajeNumeroBloqueado(hasta) }
     }
+    setEnvios((prev) => ({ ...prev, [numero]: { solicitudes: [...recientes, ahora], bloqueadoHasta: null } }))
+    return { ok: true, codigo: generarCodigo(), expiraEn: ahora + DURACION_CODIGO_MS }
   }
 
   // PW-01: identificador propio del portal = cédula (no celular/email como la app), primer
-  // factor = PIN numérico. El desafío OTP de S/A (Etapa 2FA) todavía no engancha aquí — por
-  // ahora, tras el PIN correcto, entra directo (salvo enrolamiento de dispositivo de C).
+  // factor = PIN numérico. Tras el PIN correcto: S/A pasan al desafío OTP; C entra directo,
+  // salvo el enrolamiento de dispositivo.
   function login(cedula: string, pin: string): ResultadoLogin {
     const cc = cedula.trim()
     const user = usuarios.find((u) => u.cedula === cc)
@@ -314,9 +342,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setBloqueos((prev) => ({ ...prev, [user.id]: { intentos: 0, bloqueadoHasta: null, huboBloqueoPrevio: false, duro: false } }))
 
+    // Superadministrador/Administrador: un único desafío OTP, nunca dos (PW-01).
+    if (requiere2FA(user.rol)) {
+      const emitido = emitirCodigo(user)
+      if (!emitido.ok) return { ok: false, tipo: 'codigo', mensaje: emitido.mensaje }
+      setDesafio2FA({ userId: user.id, codigo: emitido.codigo, expiraEn: emitido.expiraEn, fallos: 0 })
+      return { ok: true }
+    }
+
     // Coordinador Territorial sin 2FA: si el dispositivo no es el enrolado, primero hay que
-    // enrolarlo (PW-01). Superadministrador/Administrador quedan para la Etapa 2FA vía OTP.
-    if (!requiere2FA(user.rol) && dispositivosEnrolados[user.id] !== idDeEsteDispositivo()) {
+    // enrolarlo (PW-01).
+    if (dispositivosEnrolados[user.id] !== idDeEsteDispositivo()) {
       setDispositivoPendiente({ userId: user.id })
       return { ok: true }
     }
@@ -331,6 +367,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     crearSesion(dispositivoPendiente.userId)
   }
 
+  function confirmarCodigo2FA(codigo: string): ResultadoCodigo {
+    if (!desafio2FA) return { ok: false, mensaje: 'Paso inválido.' }
+    const r = evaluarCodigo(desafio2FA, codigo)
+    if (!r.ok) {
+      setDesafio2FA({ ...desafio2FA, ...r.cambios })
+      return { ok: false, mensaje: r.mensaje }
+    }
+    crearSesion(desafio2FA.userId)
+    return { ok: true }
+  }
+
+  function reenviarCodigo2FA(): ResultadoCodigo {
+    const user = desafio2FA && usuarios.find((u) => u.id === desafio2FA.userId)
+    if (!user) return { ok: false, mensaje: 'Paso inválido.' }
+    const emitido = emitirCodigo(user)
+    if (!emitido.ok) return emitido
+    setDesafio2FA({ userId: user.id, codigo: emitido.codigo, expiraEn: emitido.expiraEn, fallos: 0 })
+    return { ok: true }
+  }
+
+  // Corta el paso en curso (desafío OTP o enrolamiento) y devuelve a LoginPage. Los códigos ya
+  // emitidos siguen contando para el antiabuso.
+  function cancelarPendiente() {
+    setDesafio2FA(null)
+    setDispositivoPendiente(null)
+  }
+
   function desbloquearComoAdminDemo(cedula: string) {
     const user = usuarios.find((u) => u.cedula === cedula.trim())
     if (!user) return
@@ -339,61 +402,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       delete resto[user.id]
       return resto
     })
-  }
-
-  function confirmarTotpSetup(codigo: string): ResultadoCodigo {
-    if (!pendiente || pendiente.tipo !== 'totp-setup') return { ok: false, mensaje: 'Paso inválido.' }
-    if (!verificarCodigoTotp(pendiente.base32, codigo)) {
-      return { ok: false, mensaje: 'Código incorrecto. Revisa tu app autenticadora.' }
-    }
-    actualizarUsuario(pendiente.userId, { totpConfigurado: true, totpSecret: pendiente.base32 })
-    const resto = colaPendiente.slice(1)
-    setColaPendiente(resto)
-    avanzarCola(resto, pendiente.userId)
-    return { ok: true }
-  }
-
-  function reenviarCodigoWhatsapp() {
-    if (!pendiente || pendiente.tipo !== 'whatsapp-verify') return
-    setPendiente({ ...pendiente, codigo: generarCodigo(), expiraEn: Date.now() + DURACION_CODIGO_MS })
-  }
-
-  // No revierte pasos ya confirmados (confirmarTotpSetup/confirmarWhatsapp ya persisten el
-  // suyo al momento de confirmarse, antes de avanzar la cola) — solo corta el paso en curso
-  // y lo que quedaba pendiente, devolviendo a LoginPage al formulario plano.
-  function cancelarPendiente() {
-    setColaPendiente([])
-    setPendiente(null)
-    setDispositivoPendiente(null)
-  }
-
-  function confirmarWhatsapp(codigo: string): ResultadoCodigo {
-    if (!pendiente || pendiente.tipo !== 'whatsapp-verify') return { ok: false, mensaje: 'Paso inválido.' }
-    if (Date.now() > pendiente.expiraEn) return { ok: false, mensaje: 'El código expiró, pide uno nuevo.' }
-    if (pendiente.codigo !== codigo) return { ok: false, mensaje: 'Código incorrecto.' }
-    actualizarUsuario(pendiente.userId, { whatsappVerificado: true })
-    const resto = colaPendiente.slice(1)
-    setColaPendiente(resto)
-    avanzarCola(resto, pendiente.userId)
-    return { ok: true }
-  }
-
-  function confirmarTotpChallenge(codigo: string, recordarDispositivo: boolean): ResultadoCodigo {
-    if (!pendiente || pendiente.tipo !== 'totp-challenge') return { ok: false, mensaje: 'Paso inválido.' }
-    const user = usuarios.find((u) => u.id === pendiente.userId)
-    if (!user?.totpSecret || !verificarCodigoTotp(user.totpSecret, codigo)) {
-      return { ok: false, mensaje: 'Código incorrecto o expirado.' }
-    }
-    if (recordarDispositivo) {
-      setConfianzas((prev) => ({
-        ...prev,
-        [user.id]: { deviceId: idDeEsteDispositivo(), expiraEn: Date.now() + DURACION_DISPOSITIVO_CONFIADO_MS },
-      }))
-    }
-    const resto = colaPendiente.slice(1)
-    setColaPendiente(resto)
-    avanzarCola(resto, pendiente.userId)
-    return { ok: true }
   }
 
   function cerrarSesion() {
@@ -408,7 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function limiteDe(userId: string): LimiteRecuperacion {
-    return limites[userId] ?? { solicitudes: [], fallosDigitos: 0, pausadaHasta: null }
+    return limites[userId] ?? { fallosDigitos: 0, pausadaHasta: null }
   }
 
   function mensajePausa(hasta: number): string {
@@ -420,23 +428,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return { ok: false, mensaje: 'No encontramos una cuenta con esa cédula.' }
     const { pausadaHasta } = limiteDe(user.id)
     if (pausadaHasta && pausadaHasta > Date.now()) return { ok: false, mensaje: mensajePausa(pausadaHasta) }
-    setRecuperacion({ userId: user.id, etapa: 'digitos', codigo: null, expiraEn: null })
+    setRecuperacion({ userId: user.id, etapa: 'digitos', codigo: null, expiraEn: null, fallos: 0 })
     return { ok: true }
   }
 
-  // Emite o reemite el OTP respetando el antiabuso (3 solicitudes cada 15 min por cuenta).
-  function emitirCodigo(userId: string, fallosDigitos: number): ResultadoCodigo {
-    const ahora = Date.now()
-    const limite = limiteDe(userId)
-    const recientes = limite.solicitudes.filter((t) => ahora - t < VENTANA_SOLICITUDES_MS)
-    if (recientes.length >= MAX_SOLICITUDES_CODIGO) {
-      return {
-        ok: false,
-        mensaje: `Ya pediste ${MAX_SOLICITUDES_CODIGO} códigos en los últimos 15 minutos. Podrás pedir otro en ${minutosHasta(recientes[0] + VENTANA_SOLICITUDES_MS)} min.`,
-      }
-    }
-    setLimites((prev) => ({ ...prev, [userId]: { ...limite, fallosDigitos, solicitudes: [...recientes, ahora] } }))
-    setRecuperacion({ userId, etapa: 'codigo', codigo: generarCodigo(), expiraEn: ahora + DURACION_CODIGO_MS })
+  function emitirCodigoRecuperacion(user: DemoUser): ResultadoCodigo {
+    const emitido = emitirCodigo(user)
+    if (!emitido.ok) return emitido
+    setRecuperacion({ userId: user.id, etapa: 'codigo', codigo: emitido.codigo, expiraEn: emitido.expiraEn, fallos: 0 })
     return { ok: true }
   }
 
@@ -449,12 +448,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRecuperacion(null)
       return { ok: false, mensaje: mensajePausa(limite.pausadaHasta) }
     }
-    if (digitos !== user.telefonoWhatsapp.replace(/\D/g, '').slice(-2)) {
+    if (digitos !== numeroDe(user).slice(-2)) {
       const fallos = limite.fallosDigitos + 1
       if (fallos >= FALLOS_DIGITOS_MAXIMOS) {
         setLimites((prev) => ({
           ...prev,
-          [user.id]: { ...limite, fallosDigitos: 0, pausadaHasta: Date.now() + PAUSA_RECUPERACION_MS },
+          [user.id]: { fallosDigitos: 0, pausadaHasta: Date.now() + PAUSA_RECUPERACION_MS },
         }))
         setRecuperacion(null)
         return {
@@ -468,23 +467,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         mensaje: `Los dígitos no coinciden con el celular registrado. ${intentosRestantes(FALLOS_DIGITOS_MAXIMOS - fallos)}`,
       }
     }
-    return emitirCodigo(user.id, 0)
+    const r = emitirCodigoRecuperacion(user)
+    if (r.ok) setLimites((prev) => ({ ...prev, [user.id]: { fallosDigitos: 0, pausadaHasta: null } }))
+    return r
   }
 
   function reenviarCodigoRecuperacion(): ResultadoCodigo {
     if (!recuperacion || recuperacion.etapa !== 'codigo') return { ok: false, mensaje: 'Paso inválido.' }
-    return emitirCodigo(recuperacion.userId, limiteDe(recuperacion.userId).fallosDigitos)
+    const user = usuarios.find((u) => u.id === recuperacion.userId)
+    if (!user) return { ok: false, mensaje: 'Paso inválido.' }
+    return emitirCodigoRecuperacion(user)
   }
 
   function confirmarCodigoRecuperacion(codigo: string): ResultadoCodigo {
-    if (!recuperacion || recuperacion.etapa !== 'codigo' || !recuperacion.codigo || !recuperacion.expiraEn) {
-      return { ok: false, mensaje: 'Solicita el código de nuevo.' }
+    if (!recuperacion || recuperacion.etapa !== 'codigo') return { ok: false, mensaje: 'Solicita el código de nuevo.' }
+    const r = evaluarCodigo(recuperacion, codigo)
+    if (!r.ok) {
+      setRecuperacion({ ...recuperacion, ...r.cambios })
+      return { ok: false, mensaje: r.mensaje }
     }
-    if (Date.now() > recuperacion.expiraEn) return { ok: false, mensaje: 'El código venció. Pide uno nuevo.' }
-    if (recuperacion.codigo !== codigo) {
-      return { ok: false, mensaje: 'El código no es correcto. Revísalo e inténtalo de nuevo.' }
-    }
-    setRecuperacion({ ...recuperacion, etapa: 'pin', codigo: null, expiraEn: null })
+    setRecuperacion({ ...recuperacion, etapa: 'pin', codigo: null, expiraEn: null, fallos: 0 })
     return { ok: true }
   }
 
@@ -524,16 +526,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     usuarios,
     sesion,
     usuarioActual,
-    pendiente,
+    desafio2FA,
     dispositivoPendiente,
     motivoSalida,
     recuperacion,
     login,
     confirmarEnrolamiento,
-    confirmarTotpSetup,
-    confirmarWhatsapp,
-    confirmarTotpChallenge,
-    reenviarCodigoWhatsapp,
+    confirmarCodigo2FA,
+    reenviarCodigo2FA,
     cancelarPendiente,
     cerrarSesion,
     limpiarMotivoSalida,

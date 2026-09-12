@@ -1,73 +1,126 @@
 import type { ReactNode } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { FondoConexiones } from './FondoConexiones'
 import { ViaLogo } from './ViaLogo'
 
 interface Props {
+  // Línea pequeña arriba del título (p. ej. "Bienvenido") — opcional, solo la usa la
+  // pantalla de entrada al flujo (feedback 2026-09-12: dar más jerarquía/aire a la carta).
+  saludo?: string
   titulo: string
   subtitulo?: ReactNode
-  // Indicador de puntos del flujo (login: 2 pasos, recuperación: 4).
+  // Indicador de puntos del flujo (login: 2 pasos, recuperación: 5).
   paso?: { actual: number; total: number }
   onVolver?: () => void
   onCerrar?: () => void
-  // Botón principal y secundarios: en móvil bajan al pie de la pantalla, al alcance del
-  // pulgar; en tablet y escritorio siguen al contenido.
+  // Botón principal y secundarios de cada paso.
   acciones?: ReactNode
   children?: ReactNode
+  // 'amplio': el paso lleva CasillasDigitos — la tarjeta crece para que las casillas
+  // aprovechen el espacio y no se salgan de ella (feedback 2026-09-12).
+  ancho?: 'normal' | 'amplio'
 }
 
-// Estructura del kit CRM de Figma (nodo 9077:792): formulario sobre blanco a la izquierda y
-// panel de marca a la derecha, este último solo en escritorio. El logo vive en la columna
-// blanca porque su capa principal es café oscuro y se pierde sobre el azul marino.
-export function AuthLayout({ titulo, subtitulo, paso, onVolver, onCerrar, acciones, children }: Props) {
+// Q-1251/Q-1252: una sola tarjeta en vidrio ("glass", revisión "premium" 2026-09-12)
+// centrada sobre el fondo animado de nodos, que se monta una sola vez a pantalla completa
+// y actúa como la piel fija de todo el flujo de acceso — cédula, PIN, 2FA y recuperación
+// comparten este mismo fondo sin remontarlo. El ancho de la tarjeta anima con una transición
+// CSS normal (no con `layout` de motion): `layout` interpola el resize con una transformación
+// de escala interna que "estira" visualmente todo lo de adentro mientras dura la animación
+// —incluido el logo, aunque nunca cambie de tamaño en el código— y eso fue justo el efecto
+// que se sentía brusco (feedback 2026-09-12). El contenido de cada paso sí usa
+// `AnimatePresence` para un cruce de opacidad/posición, pero en modo "wait" (secuencial, no
+// superpuesto) y con una duración más larga, para que se sienta pausado y ordenado.
+export function AuthLayout({ saludo, titulo, subtitulo, paso, onVolver, onCerrar, acciones, children, ancho = 'normal' }: Props) {
+  const conCabecera = Boolean(onVolver || onCerrar || paso)
+
   return (
-    <div className="min-h-dvh bg-marino lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
-      <main className="flex min-h-dvh flex-col bg-fondo text-grafito lg:rounded-r-2xl">
-        <header className="grid h-16 grid-cols-[3rem_1fr_3rem] items-center px-3 sm:px-6 lg:h-20 lg:px-10">
-          <div>
-            {onVolver && (
-              <BotonIcono etiqueta="Volver" onClick={onVolver}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 10H4" />
-                  <path d="M9 5l-5 5 5 5" />
-                </svg>
-              </BotonIcono>
-            )}
+    <div className="min-h-dvh bg-fondo-acceso">
+      <FondoConexiones />
+      <div className="relative flex min-h-dvh items-center justify-center px-4 py-10">
+        <div
+          className={`relative w-full overflow-hidden rounded-[36px] border border-white/10 bg-gradient-to-b from-[#faf6ee]/[0.08] to-[#faf6ee]/[0.03] shadow-[0_40px_90px_rgba(0,0,0,0.55),0_1px_0_rgba(255,255,255,0.14)_inset] backdrop-blur-[18px] backdrop-saturate-[1.2] transition-[max-width] duration-700 ease-in-out ${
+            ancho === 'amplio' ? 'max-w-[34rem]' : 'max-w-[26rem]'
+          }`}
+        >
+          {/* Glow de esquina: solo degradado, sin filter:blur — un filter sobre un
+              descendiente de un elemento con overflow-hidden + backdrop-filter no siempre
+              se recorta bien (algunos navegadores dejan un borde recto/puntudo asomando
+              sobre la esquina redondeada). El degradado ya trae su propia caída suave y
+              respeta el radio de la carta sin ese problema. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-1/3 -top-1/3 h-2/3 w-2/3 rounded-full opacity-70"
+            style={{
+              background:
+                'radial-gradient(circle, rgba(72,150,230,0.55) 0%, rgba(72,150,230,0.32) 30%, rgba(72,150,230,0.12) 55%, rgba(72,150,230,0.03) 75%, transparent 90%)',
+            }}
+          />
+          {/* El logo NUNCA se remonta entre pasos (feedback 2026-09-12: era la pieza que más
+              se notaba "saltando" al cambiar de paso, porque vivía dentro del bloque con
+              key={titulo} de abajo). Vive fuera de AnimatePresence, así que permanece fijo en
+              su lugar durante toda la sesión de acceso — solo el contenido de cada paso
+              (título, subtítulo, campos, acciones) hace crossfade. */}
+          <div className="relative flex flex-col items-center px-7 pt-12 sm:px-9 sm:pt-14">
+            <ViaLogo className="mb-8 h-16 sm:h-20" esquema="oscuro" />
           </div>
-          <div className="flex justify-center">{paso && <IndicadorPaso {...paso} />}</div>
-          <div className="flex justify-end">
-            {onCerrar && (
-              <BotonIcono etiqueta="Cancelar y volver al inicio de sesión" onClick={onCerrar}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 5l10 10" />
-                  <path d="M15 5L5 15" />
-                </svg>
-              </BotonIcono>
-            )}
-          </div>
-        </header>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={titulo}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.55, ease: [0.4, 0, 0.2, 1] }}
+              className="paso-acceso relative flex flex-col items-center px-7 pb-12 text-center sm:px-9 sm:pb-14"
+            >
+              {conCabecera && (
+                <div className="mb-6 grid w-full grid-cols-[2.75rem_1fr_2.75rem] items-center">
+                  <div className="flex justify-start">
+                    {onVolver && (
+                      <BotonIcono etiqueta="Volver" onClick={onVolver}>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 10H4" />
+                          <path d="M9 5l-5 5 5 5" />
+                        </svg>
+                      </BotonIcono>
+                    )}
+                  </div>
+                  <div className="flex justify-center">{paso && <IndicadorPaso {...paso} />}</div>
+                  <div className="flex justify-end">
+                    {onCerrar && (
+                      <BotonIcono etiqueta="Cancelar y volver al inicio de sesión" onClick={onCerrar}>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M5 5l10 10" />
+                          <path d="M15 5L5 15" />
+                        </svg>
+                      </BotonIcono>
+                    )}
+                  </div>
+                </div>
+              )}
 
-        <div className="mx-auto flex w-full max-w-[26rem] flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:justify-center sm:pb-16">
-          <ViaLogo className="mb-8 h-10 self-start lg:mb-10 lg:h-12" />
-          <h1 className="font-heading text-[1.75rem] font-extrabold leading-9 tracking-tight sm:text-[2rem] sm:leading-[2.625rem]">
-            {titulo}
-          </h1>
-          {subtitulo && <p className="mt-3 text-sm leading-[1.3125rem] text-texto-suave">{subtitulo}</p>}
-          {children && <div className="mt-8 sm:mt-10">{children}</div>}
-          {acciones && <div className="mt-auto flex flex-col gap-3 pt-8 sm:mt-10 sm:pt-0">{acciones}</div>}
+              {saludo && <p className="mb-1.5 text-sm font-bold text-texto-suave">{saludo}</p>}
+              <h1 className="font-heading text-2xl font-extrabold leading-8 tracking-tight text-grafito">{titulo}</h1>
+              {subtitulo && <p className="mt-3 text-sm leading-[1.3125rem] text-texto-suave">{subtitulo}</p>}
+              {children && <div className="mt-8 w-full text-left">{children}</div>}
+              {acciones && <div className="mt-8 flex w-full flex-col gap-3">{acciones}</div>}
+            </motion.div>
+          </AnimatePresence>
         </div>
-      </main>
-
-      <PanelMarca />
+      </div>
     </div>
   )
 }
 
+// Mismo tratamiento sólido y con volumen que el botón principal (Button variante
+// "ejecutivo"): avanzar y retroceder comparten el mismo lenguaje de color/profundidad.
 function BotonIcono({ etiqueta, onClick, children }: { etiqueta: string; onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={etiqueta}
-      className="grid size-11 place-items-center rounded-full text-xl text-grafito outline-none transition hover:bg-borde/70 focus-visible:ring-4 focus-visible:ring-ambar/40"
+      className="grid size-11 place-items-center rounded-full bg-gradient-to-b from-[#f7f5f1] to-[#e6e3dc] text-xl text-[#14181f] shadow-[0_1px_0_rgba(255,255,255,0.9)_inset,0_-2px_3px_rgba(0,0,0,0.10)_inset,0_-5px_8px_rgba(0,0,0,0.18)_inset,0_10px_22px_rgba(0,0,0,0.45)] outline-none transition-transform duration-150 ease-out hover:-translate-y-px active:translate-y-px focus-visible:ring-4 focus-visible:ring-ambar/40"
     >
       <span aria-hidden="true">{children}</span>
     </button>
@@ -89,69 +142,6 @@ function IndicadorPaso({ actual, total }: { actual: number; total: number }) {
           }`}
         />
       ))}
-    </div>
-  )
-}
-
-// Solo escritorio. Decorativo: un tablero abstracto, sin cifras — ninguna métrica aquí es real.
-function PanelMarca() {
-  return (
-    <aside aria-hidden="true" className="relative hidden overflow-hidden lg:flex lg:flex-col lg:justify-center lg:px-14 xl:px-20">
-      <div className="absolute -right-32 -top-40 size-[30rem] rounded-full bg-primario/60 blur-3xl" />
-      <div className="absolute -bottom-48 -left-24 size-[26rem] rounded-full bg-ambar/10 blur-3xl" />
-      <div className="relative max-w-md">
-        <p className="font-heading text-xs font-bold uppercase tracking-[0.2em] text-ambar">Portal administrativo</p>
-        <p className="mt-4 font-heading text-3xl font-extrabold leading-tight text-white">
-          Gestión y seguimiento de la app VIA
-        </p>
-        <p className="mt-3 text-sm leading-6 text-white/65">
-          Uso, operación y datos de Conexión Huila 2027 en un solo lugar.
-        </p>
-        <TableroAbstracto />
-      </div>
-    </aside>
-  )
-}
-
-function TableroAbstracto() {
-  const barras = [38, 62, 48, 80, 56, 92, 70]
-  return (
-    <div className="mt-12 rounded-2xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
-      <div className="flex items-center gap-2">
-        <span className="size-2.5 rounded-full bg-white/20" />
-        <span className="size-2.5 rounded-full bg-white/20" />
-        <span className="size-2.5 rounded-full bg-white/20" />
-        <span className="ml-3 h-2 w-24 rounded-full bg-white/15" />
-      </div>
-      <div className="mt-5 grid grid-cols-3 gap-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="rounded-xl bg-white/[0.06] p-3">
-            <div className="h-1.5 w-10 rounded-full bg-white/20" />
-            <div className={`mt-3 h-3 w-14 rounded-full ${i === 0 ? 'bg-ambar/80' : 'bg-white/35'}`} />
-          </div>
-        ))}
-      </div>
-      <div className="mt-5 flex h-28 items-end gap-2 rounded-xl bg-white/[0.04] p-3">
-        {barras.map((alto, i) => (
-          <div
-            key={i}
-            className={`flex-1 rounded-t-md ${i === 5 ? 'bg-ambar/80' : 'bg-white/20'}`}
-            style={{ height: `${alto}%` }}
-          />
-        ))}
-      </div>
-      <div className="mt-5 space-y-2.5">
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 ${i === 1 ? 'bg-white/[0.08] ring-1 ring-ambar/50' : ''}`}
-          >
-            <span className="size-7 rounded-full bg-white/15" />
-            <span className="h-2 flex-1 rounded-full bg-white/15" />
-            <span className="h-2 w-10 rounded-full bg-white/10" />
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

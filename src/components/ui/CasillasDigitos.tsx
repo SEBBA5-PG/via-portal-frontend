@@ -45,9 +45,9 @@ export function CasillasDigitos({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-center gap-2">
       <div className="relative w-fit">
-        <div className="flex gap-2 sm:gap-3" aria-hidden="true">
+        <div className="flex justify-center gap-2 sm:gap-3" aria-hidden="true">
           {Array.from({ length: longitud }, (_, i) => {
             const digito = valor[i]
             const activa = enfocado && !completo && i === valor.length
@@ -57,11 +57,11 @@ export function CasillasDigitos({
                 ? 'border-primario ring-4 ring-ambar/35'
                 : digito
                   ? 'border-primario/60'
-                  : 'border-borde'
+                  : 'border-borde/40'
             return (
               <div
                 key={i}
-                className={`grid aspect-[4/5] w-[clamp(2.25rem,11vw,3.5rem)] place-items-center rounded-control border-[1.5px] bg-fondo font-heading text-2xl font-bold text-grafito transition ${borde}`}
+                className={`grid aspect-[4/5] w-[clamp(2.25rem,9vw,3.5rem)] place-items-center rounded-control border-[1.5px] bg-fondo/[0.05] font-heading text-2xl font-bold text-grafito transition ${borde}`}
               >
                 {digito && (oculto && !revelado ? <span className="size-2.5 rounded-full bg-grafito" /> : digito)}
                 {activa && <span className="h-6 w-0.5 animate-pulse bg-primario" />}

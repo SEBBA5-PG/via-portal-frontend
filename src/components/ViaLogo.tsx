@@ -24,19 +24,32 @@ const ROTACION = -6.43
 const ANCHO_SESGO_SUAVE = { height: '90.26%', width: '100.63%' } // letras V y A
 const ANCHO_SESGO_FUERTE = { height: '98.78%', width: '60%' } // letra I (más angosta)
 
-const FRAGMENTOS: Fragmento[] = [
+const OSCUROS: Fragmento[] = [
   { src: vDark, inset: '11.92% 57.27% 1.34% 4.2%', skew: -6.43, ...ANCHO_SESGO_SUAVE },
   { src: iDark, inset: '7.77% 36.64% 9% 40.87%', skew: -18.83, ...ANCHO_SESGO_FUERTE },
   { src: aDark, inset: '0.01% 0.36% 13.23% 61.01%', skew: -6.43, ...ANCHO_SESGO_SUAVE },
+]
+const CLAROS: Fragmento[] = [
   { src: vLight, inset: '12.69% 61.27% 0.1% 0%', skew: -6.43, ...ANCHO_SESGO_SUAVE },
   { src: iLight, inset: '8.52% 40.53% 7.8% 36.85%', skew: -18.83, ...ANCHO_SESGO_FUERTE },
   { src: aLight, inset: '0.71% 4.06% 12.05% 57.1%', skew: -6.43, ...ANCHO_SESGO_SUAVE },
 ]
 
-export function ViaLogo({ className = '' }: { className?: string }) {
+interface Props {
+  className?: string
+  // 'claro': el logo va sobre fondo claro (tarjetas blancas) — la capa oscura queda
+  // encima para resaltar. 'oscuro': logo sobre fondo oscuro — la capa clara queda
+  // encima. Feedback 2026-09-12: dejar el mecanismo listo para cuando exista modo oscuro.
+  esquema?: 'claro' | 'oscuro'
+}
+
+export function ViaLogo({ className = '', esquema = 'claro' }: Props) {
+  // La capa que debe resaltar va al final: el orden de pintado en el DOM decide cuál
+  // capa queda encima, ninguna lleva z-index.
+  const fragmentos = esquema === 'claro' ? [...CLAROS, ...OSCUROS] : [...OSCUROS, ...CLAROS]
   return (
     <div className={`relative ${className}`} style={{ aspectRatio: '173 / 89' }} role="img" aria-label="VIA">
-      {FRAGMENTOS.map((f, i) => (
+      {fragmentos.map((f, i) => (
         <div key={i} className="absolute flex items-center justify-center" style={{ inset: f.inset }}>
           <div
             style={{

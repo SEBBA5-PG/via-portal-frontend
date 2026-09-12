@@ -79,12 +79,15 @@ function BloqueoTemporal({ hasta }: { hasta: number }) {
         </Button>
       }
     >
-      <div className="flex flex-col gap-3">
+      {/* AuthLayout envuelve los children en un div "text-left" (pensado para formularios) —
+          esta pantalla es solo texto informativo, así que se centra explícitamente y se le
+          da más aire vertical (feedback 2026-09-12: se veía apretado y pegado a la izquierda). */}
+      <div className="flex flex-col items-center gap-5 text-center">
         <p className="text-sm text-texto-suave">Podrás intentarlo de nuevo en</p>
-        <p className="font-heading text-5xl font-extrabold tabular-nums text-grafito">
+        <p className="font-heading text-6xl font-extrabold tabular-nums text-grafito sm:text-7xl">
           {minutos}:{segundos.toString().padStart(2, '0')}
         </p>
-        <p className="text-sm leading-6 text-texto-suave">
+        <p className="max-w-[26rem] text-sm leading-6 text-texto-suave">
           Si vuelves a agotar los intentos, la cuenta pasará a bloqueo duro y necesitará desbloqueo
           manual de un Administrador.
         </p>

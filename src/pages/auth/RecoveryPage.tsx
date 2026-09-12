@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LONGITUD_CODIGO, LONGITUD_PIN, useAuth } from '../../state/authStore'
 import { AuthLayout } from '../../components/AuthLayout'
@@ -6,8 +6,13 @@ import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { CasillasDigitos } from '../../components/ui/CasillasDigitos'
 import { DemoNotice } from '../../components/ui/DemoNotice'
+import { VigenciaCodigo } from '../../components/ui/VigenciaCodigo'
+import UsersIcon from '../../icons/UsersIcon'
+import type { AnimatedIconHandle } from '../../icons/types'
 
-const TOTAL_PASOS = 4
+// 5, no 4: crear el PIN nuevo y confirmarlo son pasos distintos del indicador (2026-09-12,
+// antes ambos quedaban pegados al mismo punto 4/4 y el indicador no se movía entre ellos).
+const TOTAL_PASOS = 5
 
 // PW-01, Recuperación de PIN: cédula → 2 últimos dígitos del celular → código por WhatsApp →
 // PIN nuevo. La etapa vive en el store (auth.recuperacion); aquí solo lo que se escribe.
@@ -25,6 +30,7 @@ export function RecoveryPage() {
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [terminado, setTerminado] = useState<{ sigueBloqueadoDuro: boolean } | null>(null)
+  const iconoCedulaRef = useRef<AnimatedIconHandle>(null)
 
   const etapa = auth.recuperacion?.etapa ?? 'cedula'
 
@@ -118,6 +124,7 @@ export function RecoveryPage() {
           setDigitos('')
         }}
         onCerrar={salir}
+        ancho="amplio"
         acciones={
           <Button variante="ejecutivo" className="w-full" disabled={digitos.length !== 2} onClick={enviarDigitos}>
             Enviar código por WhatsApp
@@ -147,6 +154,7 @@ export function RecoveryPage() {
         subtitulo={`Te enviamos un código de ${LONGITUD_CODIGO} dígitos por WhatsApp al celular registrado en tu cuenta.`}
         paso={{ actual: 3, total: TOTAL_PASOS }}
         onCerrar={salir}
+        ancho="amplio"
         acciones={
           <>
             <Button
@@ -199,8 +207,12 @@ export function RecoveryPage() {
       <AuthLayout
         titulo="Crea tu PIN nuevo"
         subtitulo={`Elige un PIN de ${LONGITUD_PIN} dígitos. No lo compartas con nadie.`}
-        paso={{ actual: 4, total: TOTAL_PASOS }}
+        // El título no cambia entre "nuevo" y "confirmar" (evita remontar/re-animar toda
+        // la carta con AnimatePresence solo por avanzar el punto del indicador) — pero el
+        // indicador sí avanza de 4 a 5, así se ve que confirmar el PIN es su propio paso.
+        paso={{ actual: pedirConfirmacion ? 5 : 4, total: TOTAL_PASOS }}
         onCerrar={salir}
+        ancho="amplio"
         acciones={
           <Button
             variante="ejecutivo"
@@ -273,6 +285,7 @@ export function RecoveryPage() {
         <TextField
           etiqueta="Número de cédula"
           ayuda="Solo números, sin puntos ni espacios."
+          placeholder="0000000000"
           inputMode="numeric"
           autoComplete="username"
           autoFocus
@@ -282,32 +295,10 @@ export function RecoveryPage() {
             if (error) setError(null)
           }}
           error={error}
+          icono={<UsersIcon ref={iconoCedulaRef} size={20} />}
+          iconoRef={iconoCedulaRef}
         />
       </form>
     </AuthLayout>
-  )
-}
-
-function VigenciaCodigo({ expiraEn }: { expiraEn: number }) {
-  const [ahora, setAhora] = useState(() => Date.now())
-
-  useEffect(() => {
-    const id = setInterval(() => setAhora(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
-
-  const restante = Math.max(0, expiraEn - ahora)
-  if (restante === 0) {
-    return <p className="text-sm font-bold text-red-600">El código venció. Pide uno nuevo.</p>
-  }
-  const minutos = Math.floor(restante / 60_000)
-  const segundos = Math.floor((restante % 60_000) / 1000)
-  return (
-    <p className="text-sm text-texto-suave">
-      El código vence en{' '}
-      <span className="font-bold tabular-nums text-grafito">
-        {minutos}:{segundos.toString().padStart(2, '0')}
-      </span>
-    </p>
   )
 }

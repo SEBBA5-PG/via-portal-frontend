@@ -1,177 +1,142 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { LONGITUD_CODIGO, useAuth } from '../../state/authStore'
-import { enmascararTelefono } from '../../state/format'
-import { AuthLayout } from '../../components/AuthLayout'
 import { Button } from '../../components/ui/Button'
 import { CasillasDigitos } from '../../components/ui/CasillasDigitos'
 import { DemoNotice } from '../../components/ui/DemoNotice'
-import { QrImage } from '../../components/ui/QrImage'
+import { VigenciaCodigo } from '../../components/ui/VigenciaCodigo'
+
+// Props que le bastan a un solo <AuthLayout> para mostrar cualquier paso del login — nunca
+// un subconjunto distinto de props de AuthLayout, para que LoginPage pueda renderizar
+// siempre el mismo elemento (ver el porqué en LoginPage.tsx).
+export interface PasoLoginProps {
+  saludo?: string
+  titulo: string
+  subtitulo?: ReactNode
+  paso?: { actual: number; total: number }
+  onVolver?: () => void
+  onCerrar?: () => void
+  ancho?: 'normal' | 'amplio'
+  acciones: ReactNode
+  children?: ReactNode
+}
 
 // PW-01: un solo dispositivo enrolado por cuenta — Coordinador Territorial no tiene 2FA, así
 // que este es el único paso extra en su primer acceso desde un dispositivo nuevo.
-export function DeviceEnrollStep() {
+//
+// Antes esto era un componente que retornaba su propio <AuthLayout>, y LoginPage hacía
+// `return <DeviceEnrollStep />` en vez de seguir con su <AuthLayout> de siempre — React ve
+// ahí un tipo de elemento distinto en el mismo lugar del árbol y remonta todo de cero (el
+// fondo de nodos, el logo, todo), sin pasar por la transición suave entre pasos (feedback
+// 2026-09-12). Ahora es un hook que solo devuelve las props del paso — LoginPage arma un
+// único <AuthLayout>, así que React lo actualiza en vez de remontarlo, sin importar de qué
+// paso a cuál se mueva.
+export function useDeviceEnrollStep(): PasoLoginProps | null {
   const auth = useAuth()
   if (!auth.dispositivoPendiente) return null
 
-  return (
-    <AuthLayout
-      titulo="Nuevo dispositivo"
-      subtitulo="Es tu primer acceso desde este dispositivo."
-      onCerrar={() => auth.cancelarPendiente()}
-      acciones={
-        <>
-          <Button variante="ejecutivo" className="w-full" onClick={() => auth.confirmarEnrolamiento()}>
-            Enrolar y continuar
-          </Button>
-          <Button variante="ejecutivo-suave" className="w-full" onClick={() => auth.cancelarPendiente()}>
-            Cancelar
-          </Button>
-        </>
-      }
-    >
+  return {
+    titulo: 'Nuevo dispositivo',
+    subtitulo: 'Es tu primer acceso desde este dispositivo.',
+    onCerrar: () => auth.cancelarPendiente(),
+    acciones: (
+      <>
+        <Button variante="ejecutivo" className="w-full" onClick={() => auth.confirmarEnrolamiento()}>
+          Enrolar y continuar
+        </Button>
+        <Button variante="ejecutivo-suave" className="w-full" onClick={() => auth.cancelarPendiente()}>
+          Cancelar
+        </Button>
+      </>
+    ),
+    children: (
       <p className="text-sm leading-6 text-grafito">
         El portal admite un solo dispositivo activo por cuenta. Si continúas, se cerrará el acceso
         desde cualquier otro dispositivo enrolado con esta cuenta.
       </p>
-    </AuthLayout>
-  )
+    ),
+  }
 }
 
-export function TotpSetupStep() {
+// PW-01, Mecanismo de 2FA: Superadministrador y Administrador, tras el PIN correcto, confirman un
+// código de un solo uso enviado por WhatsApp al celular de la cuenta. El número no se muestra.
+// Mismo motivo que arriba: hook que devuelve props, no un componente con su propio AuthLayout.
+export function useDesafioOtpStep(): PasoLoginProps | null {
   const auth = useAuth()
   const [codigo, setCodigo] = useState('')
   const [error, setError] = useState<string | null>(null)
-  if (auth.pendiente?.tipo !== 'totp-setup') return null
-  const { otpauthUri, base32 } = auth.pendiente
+  const [aviso, setAviso] = useState<string | null>(null)
+  const desafio = auth.desafio2FA
+  if (!desafio) return null
 
-  function confirmar() {
-    const r = auth.confirmarTotpSetup(codigo)
-    if (!r.ok) setError(r.mensaje)
+  function verificar(valor: string) {
+    if (!desafio || valor.length !== LONGITUD_CODIGO) return
+    setError(null)
+    setAviso(null)
+    const r = auth.confirmarCodigo2FA(valor)
+    if (r.ok) return
+    setCodigo('')
+    // El vencimiento ya lo anuncia VigenciaCodigo debajo de las casillas: no repetirlo.
+    const vencido = desafio.expiraEn != null && Date.now() > desafio.expiraEn
+    if (!vencido) setError(r.mensaje)
   }
 
-  return (
-    <AuthLayout
-      titulo="Configura tu segundo factor"
-      subtitulo="Obligatorio para Superadministrador y Administrador."
-      onCerrar={() => auth.cancelarPendiente()}
-      acciones={
-        <Button variante="ejecutivo" className="w-full" onClick={confirmar} disabled={codigo.length !== LONGITUD_CODIGO}>
-          Confirmar y activar
+  function reenviar() {
+    setError(null)
+    setAviso(null)
+    setCodigo('')
+    const r = auth.reenviarCodigo2FA()
+    if (r.ok) setAviso('Te enviamos un código nuevo.')
+    else setError(r.mensaje)
+  }
+
+  return {
+    titulo: 'Verifica que eres tú',
+    subtitulo: `Por seguridad, te enviamos un código de ${LONGITUD_CODIGO} dígitos por WhatsApp al celular registrado en tu cuenta.`,
+    onVolver: () => auth.cancelarPendiente(),
+    ancho: 'amplio',
+    acciones: (
+      <>
+        <Button
+          variante="ejecutivo"
+          className="w-full"
+          disabled={codigo.length !== LONGITUD_CODIGO}
+          onClick={() => verificar(codigo)}
+        >
+          Verificar e ingresar
         </Button>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        <QrImage value={otpauthUri} />
-        <p className="text-sm text-texto-suave">
-          Escanéalo con Google Authenticator, Authy o similar. ¿No puedes escanear? Ingresa esta
-          clave manualmente:
-        </p>
-        <code className="self-start rounded-control bg-borde/70 px-3 py-1 text-sm tracking-widest">{base32}</code>
-        <CasillasDigitos
-          longitud={LONGITUD_CODIGO}
-          valor={codigo}
-          onChange={setCodigo}
-          etiqueta="Código de tu app autenticadora"
-          autoFocus
-          autoComplete="one-time-code"
-          error={error}
-        />
-      </div>
-    </AuthLayout>
-  )
-}
-
-export function WhatsappVerifyStep() {
-  const auth = useAuth()
-  const [codigo, setCodigo] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  if (auth.pendiente?.tipo !== 'whatsapp-verify') return null
-  const pendiente = auth.pendiente
-  const user = auth.usuarios.find((u) => u.id === pendiente.userId)
-  if (!user) return null
-
-  function confirmar() {
-    const r = auth.confirmarWhatsapp(codigo)
-    if (!r.ok) setError(r.mensaje)
-  }
-
-  return (
-    <AuthLayout
-      titulo="Verifica tu WhatsApp"
-      subtitulo={`Enviamos un código a ${enmascararTelefono(user.telefonoWhatsapp)}. Lo usamos para recuperar tu acceso si olvidas tu PIN.`}
-      onCerrar={() => auth.cancelarPendiente()}
-      acciones={
-        <>
-          <Button variante="ejecutivo" className="w-full" onClick={confirmar} disabled={codigo.length !== LONGITUD_CODIGO}>
-            Verificar
-          </Button>
-          <Button variante="ejecutivo-suave" className="w-full" onClick={() => auth.reenviarCodigoWhatsapp()}>
-            Reenviar código
-          </Button>
-        </>
-      }
-    >
+        <Button variante="ejecutivo-suave" className="w-full" onClick={reenviar}>
+          Reenviar código
+        </Button>
+      </>
+    ),
+    children: (
       <div className="flex flex-col gap-5">
         <CasillasDigitos
           longitud={LONGITUD_CODIGO}
           valor={codigo}
-          onChange={setCodigo}
-          etiqueta="Código de verificación"
+          onChange={(v) => {
+            setCodigo(v)
+            if (error) setError(null)
+          }}
+          onCompletar={verificar}
+          etiqueta={`Código de verificación de ${LONGITUD_CODIGO} dígitos`}
           autoFocus
           autoComplete="one-time-code"
           error={error}
         />
-        <DemoNotice>
-          Código simulado: <strong className="tabular-nums tracking-widest">{pendiente.codigo}</strong>. En
-          producción llega por WhatsApp.
-        </DemoNotice>
+        {desafio.expiraEn && <VigenciaCodigo expiraEn={desafio.expiraEn} />}
+        {aviso && (
+          <p role="status" className="text-sm text-grafito">
+            {aviso}
+          </p>
+        )}
+        {desafio.codigo && (
+          <DemoNotice>
+            Código simulado: <strong className="tabular-nums tracking-widest">{desafio.codigo}</strong>. En
+            producción llega por WhatsApp.
+          </DemoNotice>
+        )}
       </div>
-    </AuthLayout>
-  )
-}
-
-export function TotpChallengeStep() {
-  const auth = useAuth()
-  const [codigo, setCodigo] = useState('')
-  const [recordar, setRecordar] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  function confirmar() {
-    const r = auth.confirmarTotpChallenge(codigo, recordar)
-    if (!r.ok) setError(r.mensaje)
+    ),
   }
-
-  return (
-    <AuthLayout
-      titulo="Verificación en dos pasos"
-      subtitulo="Ingresa el código de tu app autenticadora."
-      onCerrar={() => auth.cancelarPendiente()}
-      acciones={
-        <Button variante="ejecutivo" className="w-full" onClick={confirmar} disabled={codigo.length !== LONGITUD_CODIGO}>
-          Verificar
-        </Button>
-      }
-    >
-      <div className="flex flex-col gap-5">
-        <CasillasDigitos
-          longitud={LONGITUD_CODIGO}
-          valor={codigo}
-          onChange={setCodigo}
-          etiqueta="Código de tu app autenticadora"
-          autoFocus
-          autoComplete="one-time-code"
-          error={error}
-        />
-        <label className="flex items-center gap-2 text-sm text-grafito">
-          <input
-            type="checkbox"
-            className="size-4 accent-primario"
-            checked={recordar}
-            onChange={(e) => setRecordar(e.target.checked)}
-          />
-          Recordar este dispositivo por 30 días
-        </label>
-      </div>
-    </AuthLayout>
-  )
 }

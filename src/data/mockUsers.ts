@@ -11,9 +11,6 @@ export interface DemoUser {
   rol: Rol
   email: string
   telefonoWhatsapp: string
-  totpSecret: string | null
-  totpConfigurado: boolean
-  whatsappVerificado: boolean
 }
 
 export const SEED_USERS: DemoUser[] = [
@@ -25,9 +22,6 @@ export const SEED_USERS: DemoUser[] = [
     rol: 'S',
     email: 'maria.rojas@demo.via',
     telefonoWhatsapp: '+57 300 111 2233',
-    totpSecret: null,
-    totpConfigurado: false,
-    whatsappVerificado: false,
   },
   {
     id: 'u-admin',
@@ -37,9 +31,6 @@ export const SEED_USERS: DemoUser[] = [
     rol: 'A',
     email: 'andres.perez@demo.via',
     telefonoWhatsapp: '+57 300 222 3344',
-    totpSecret: null,
-    totpConfigurado: false,
-    whatsappVerificado: false,
   },
   {
     id: 'u-coordinador',
@@ -49,8 +40,5 @@ export const SEED_USERS: DemoUser[] = [
     rol: 'C',
     email: 'laura.medina@demo.via',
     telefonoWhatsapp: '+57 300 333 4455',
-    totpSecret: null,
-    totpConfigurado: false,
-    whatsappVerificado: false,
   },
 ]

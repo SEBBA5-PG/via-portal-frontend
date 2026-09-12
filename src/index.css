@@ -1,6 +1,6 @@
 @import "tailwindcss";
-@import "@fontsource/plus-jakarta-sans/700.css";
-@import "@fontsource/plus-jakarta-sans/800.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/manrope/800.css";
 @import "@fontsource/nunito/400.css";
 @import "@fontsource/nunito/600.css";
 @import "@fontsource/nunito/700.css";
@@ -9,10 +9,12 @@
   Tokens extraídos del Figma de referencia (archivo VIA-AP, frames Dashboard/Usuarios)
   vía Figma Dev Mode MCP. La tipografía de cuerpo se corrige a Nunito: 2 PILAR.md
   (fuente cerrada) fija Nunito + Jakarta Sans como tipografía oficial; el Figma usa
-  Poppins, que no es canon.
+  Poppins, que no es canon. Títulos migrados de Plus Jakarta Sans a Manrope
+  (2026-09-12, elegida entre 5 alternativas probadas en el chat sobre el prototipo
+  del login) — reemplaza a Jakarta en todo el portal, no solo en el acceso.
 */
 @theme {
-  --font-heading: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-heading: "Manrope", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;
 
   --color-cafe: #6c3a1f;
@@ -37,16 +39,32 @@
     independiente de la app: no es canon ni vive en Constantes del Sistema de VIA BRAIN.
     Estructura y medidas tomadas del "CRM UI Kit for SaaS Dashboards" (Figma, nodo 9077:792).
     El resto del portal (AppShell, Home) sigue con los tokens de arriba hasta su rediseño.
+
+    Repunteados a la paleta "glass" oscura (2026-09-12, prototipo de chat aprobado):
+    la tarjeta del acceso dejó de ser blanca sólida, así que grafito/texto-suave/primario
+    (que solo se usan dentro de pages/auth/ y sus componentes ui/ exclusivos — verificado,
+    ningún otro lugar del portal los referencia) pasan de oscuros-sobre-blanco a
+    claros-sobre-vidrio-oscuro. --color-borde/--color-fondo se quedan en sus valores claros
+    de siempre: los componentes los usan con modificador de opacidad (/6, /40) para el
+    efecto translúcido, en vez de cambiar el token base.
   */
   --color-marino: #14213d;
-  --color-primario: #1f3a68;
+  --color-primario: #78b4ff;
   --color-ambar: #e0a526;
-  --color-grafito: #1c1d21;
-  --color-texto-suave: #6b7088;
+  --color-grafito: #f3ede4;
+  --color-texto-suave: #a39a8d;
   --color-borde: #e6e8ef;
   --color-fondo: #ffffff;
 
   --radius-control: 10px;
+
+  /*
+    Fondo animado del flujo de acceso (Q-1251/Q-1252, 2026-09-12): la piel fija de todo
+    el login — casi negro puro, con el matiz azul mínimo suficiente para no leerse plano.
+    Vive aparte de --color-marino/--color-primario de arriba: esos siguen siendo la
+    identidad del resto del portal (Q-1250), este es un tratamiento propio del acceso.
+  */
+  --color-fondo-acceso: #03060a;
 }
 
 :root {
@@ -54,8 +72,17 @@
   font-family: var(--font-body);
 }
 
+/* El fondo del <body> es lo que se asoma en el hueco de cualquier transición de página o
+   antes del primer pintado — AppShell/Home ya ponen su propio bg-institucional explícito, no
+   dependen de este valor. Se usa el tono oscuro del acceso (no el amarillo institucional) para
+   que ese hueco no rompa la paleta del login con un flash amarillo (feedback 2026-09-12). */
 body {
   margin: 0;
-  background: var(--color-institucional);
+  background: var(--color-fondo-acceso);
   color: var(--color-cafe);
 }
+
+/* La transición entre pasos del flujo de acceso (Q-1251) se maneja con `motion`
+   (AnimatePresence + layout) directamente en AuthLayout.tsx desde 2026-09-12 — un
+   `@keyframes` de CSS aquí competiría con esa animación y se sentiría doble/brusco.
+   La clase `.paso-acceso` se mantiene solo como selector, sin animación propia. */

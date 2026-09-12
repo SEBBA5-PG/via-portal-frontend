@@ -46,21 +46,25 @@ están documentadas en VIA BRAIN, en
 `decisiones/portal-web/Portal Web — Cuentas de prueba del demo.md`. Si cambian las cuentas
 de `src/data/mockUsers.ts`, se actualiza ese documento en el mismo cambio.
 
-## Login y recuperación (PW-01)
+## Login, 2FA y recuperación (PW-01)
 
 - Login en dos pantallas: cédula, luego PIN de 6 dígitos en casillas (`CasillasDigitos`).
+- 2FA: Superadministrador y Administrador, tras el PIN, confirman un código de 6 dígitos por
+  WhatsApp en **cada** login ("Verifica que eres tú"). Sin app autenticadora ni "recordar
+  dispositivo": PW-01 y el Canon fijan WhatsApp como único canal. Coordinador Territorial no
+  tiene 2FA; en su lugar, enrolamiento de dispositivo.
+- Antiabuso de códigos por **número celular** (compartido entre 2FA y recuperación): más de 3
+  solicitudes en 15 min bloquean ese número 1 hora. 3 códigos errados anulan el código (valor
+  de trabajo, sin decisión).
 - Recuperación de PIN: cédula → 2 últimos dígitos del celular registrado (el número nunca se
   muestra) → código de 6 dígitos por WhatsApp (3 min, antiabuso de 3 solicitudes cada 15 min)
   → PIN nuevo. Recuperar el PIN no levanta un bloqueo duro.
 
-## 2FA y WhatsApp: qué es real y qué es simulado
+## WhatsApp: simulado
 
-- **TOTP (2FA de Superadministrador/Administrador) es real**: usa `otpauth` + `qrcode`, se
-  puede escanear con Google Authenticator/Authy de verdad y valida el código real. Todavía no
-  está enganchado al login nuevo (Etapa 2FA pendiente).
-- **WhatsApp (verificación y recuperación de PIN) está simulado**: no hay backend ni
-  integración real. El código se genera en el navegador y se muestra en un banner "Modo
-  demo" — nunca se envía nada de verdad.
+Todo OTP (2FA y recuperación de PIN) está simulado: no hay backend ni integración real. El
+código se genera en el navegador y se muestra en un aviso "Modo demo" — nunca se envía nada
+de verdad.
 
 ## Sistema de diseño
 
@@ -83,7 +87,7 @@ canvas en el mismo cambio.
 
 | Categoría | Estado |
 |---|---|
-| PW-01 — Acceso y sesión | **Construida**: login ejecutivo en dos pasos y recuperación por OTP; falta enganchar 2FA de S/A |
+| PW-01 — Acceso y sesión | **Construida**: login ejecutivo en dos pasos, desafío OTP de 2FA para S/A y recuperación por OTP |
 | PW-02 a PW-18 | Andamiaje de menú (respeta la Matriz de Acceso por Rol), contenido "Próximamente" |
 
 Actualizar esta tabla al cerrar cada categoría nueva.
