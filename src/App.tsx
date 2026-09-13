@@ -1,7 +1,9 @@
 import { AnimatePresence } from 'motion/react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider } from './state/authStore'
+import { AdminProvider } from './state/adminStore'
 import { ProtectedRoute } from './routes/ProtectedRoute'
+import { RutaCategoria } from './routes/RutaCategoria'
 import { TransicionPagina } from './components/TransicionPagina'
 import { LoginPage } from './pages/auth/LoginPage'
 import { RecoveryPage } from './pages/auth/RecoveryPage'
@@ -10,6 +12,10 @@ import { SessionExpiredPage } from './pages/auth/SessionExpiredPage'
 import { AccessDeniedPage } from './pages/auth/AccessDeniedPage'
 import { HomePage } from './pages/HomePage'
 import { CategoryPlaceholderPage } from './pages/CategoryPlaceholderPage'
+import { CuentasPage } from './pages/pw04/CuentasPage'
+import { CrearCuentaPage } from './pages/pw04/CrearCuentaPage'
+import { FichaCuentaPage } from './pages/pw04/FichaCuentaPage'
+import { SolicitudesPage } from './pages/pw04/SolicitudesPage'
 
 // Envuelve las rutas del flujo de acceso en el mismo cruce de opacidad/posición que ya usa
 // AuthLayout entre pasos — así ir de login a recuperar, a bloqueado, a sesión expirada o a sin
@@ -71,6 +77,48 @@ function RutasAnimadas() {
             </ProtectedRoute>
           }
         />
+        {/* PW-04 — Roles y permisos. Rutas explícitas antes del comodín de categoría: React
+            Router prioriza el segmento estático, así que /PW-04 nunca cae en el placeholder. */}
+        <Route
+          path="/PW-04"
+          element={
+            <ProtectedRoute>
+              <RutaCategoria categoriaId="PW-04">
+                <CuentasPage />
+              </RutaCategoria>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/PW-04/nueva"
+          element={
+            <ProtectedRoute>
+              <RutaCategoria categoriaId="PW-04">
+                <CrearCuentaPage />
+              </RutaCategoria>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/PW-04/solicitudes"
+          element={
+            <ProtectedRoute>
+              <RutaCategoria categoriaId="PW-04">
+                <SolicitudesPage />
+              </RutaCategoria>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/PW-04/cuenta/:cuentaId"
+          element={
+            <ProtectedRoute>
+              <RutaCategoria categoriaId="PW-04">
+                <FichaCuentaPage />
+              </RutaCategoria>
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/:categoriaId"
           element={
@@ -87,9 +135,11 @@ function RutasAnimadas() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <RutasAnimadas />
-      </BrowserRouter>
+      <AdminProvider>
+        <BrowserRouter>
+          <RutasAnimadas />
+        </BrowserRouter>
+      </AdminProvider>
     </AuthProvider>
   )
 }
