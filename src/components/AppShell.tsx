@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { ViaLogo } from './ViaLogo'
 import { useAuth } from '../state/authStore'
 import { useAdmin } from '../state/adminStore'
+import { useOperacion } from '../state/operacionStore'
 import { ROLES } from '../data/roles'
 import { categoriasVisiblesPara } from '../data/matrizAcceso'
 import { pendientesParaFirmar } from '../dominio/permisos'
@@ -24,8 +25,14 @@ const claseLink = ({ isActive }: { isActive: boolean }) =>
 export function AppShell({ children }: { children: ReactNode }) {
   const auth = useAuth()
   const admin = useAdmin()
+  const op = useOperacion()
   const user = auth.usuarioActual
   if (!user) return null
+
+  // wiki §Auditoría: la impersonación es de severidad alta y su inicio y fin tienen que ser
+  // visibles (PW-03). El aviso vive en el shell para que no se pierda al navegar.
+  const impersonando = op.impersonacion?.actorId === user.id ? op.impersonacion : null
+  const aliasImpersonado = impersonando ? op.usuarios.find((u) => u.id === impersonando.usuarioId)?.alias : null
 
   // PW-02 (Home y dashboard) no se lista aparte: el link "Home" de arriba ya cubre ese
   // destino — listar los dos sería un duplicado confuso en el menú.
@@ -96,7 +103,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto px-8 py-8">{children}</main>
+      <main className="flex-1 overflow-y-auto px-8 py-8">
+        {impersonando && (
+          <div
+            role="status"
+            className="mx-auto mb-6 flex max-w-6xl flex-wrap items-center justify-between gap-3 rounded-[16px] border border-red-400/35 bg-red-500/[0.12] px-5 py-3.5 text-sm text-red-100"
+          >
+            <span>
+              Estás impersonando a <strong>{aliasImpersonado}</strong> desde las{' '}
+              {new Date(impersonando.inicio).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })} — cada acción
+              queda registrada con severidad alta.
+            </span>
+            <button
+              type="button"
+              onClick={() => op.terminarImpersonacion()}
+              className="rounded-full border border-red-300/40 bg-red-400/20 px-4 py-1.5 font-heading text-xs font-bold text-red-50 outline-none transition hover:bg-red-400/30 focus-visible:ring-4 focus-visible:ring-ambar/40"
+            >
+              Terminar impersonación
+            </button>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   )
 }

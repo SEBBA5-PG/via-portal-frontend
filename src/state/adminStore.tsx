@@ -2,7 +2,12 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import type { Rol } from '../data/roles'
 import { CUENTAS_SEED, type CuentaAdmin, type EstadoCuenta } from '../data/cuentas'
 import { SOLICITUDES_SEED, type SolicitudPermiso } from '../data/solicitudes'
-import { AUDITORIA_SEED, type EntradaAuditoria, type TipoEvento } from '../data/auditoria'
+import {
+  AUDITORIA_SEED,
+  type EntradaAuditoria,
+  type NuevaEntradaAuditoria,
+  type TipoEvento,
+} from '../data/auditoria'
 import { permisosEfectivos, separarCambios, type CambioPropuesto } from '../dominio/permisos'
 import { escribirJSON, leerJSON } from './storage'
 
@@ -51,6 +56,9 @@ interface AdminContextValue {
   cambiarEstado: (actorId: string, cuentaId: string, estado: EstadoCuenta, motivo: string) => void
   resolverSolicitud: (actorId: string, solicitudId: string, aprobar: boolean, motivoRechazo?: string) => void
   reiniciarDemo: () => void
+  // Punto único de escritura en audit_logs para las demás categorías (PW-03, PW-05): el
+  // registro es uno solo, no uno por categoría.
+  registrarEvento: (entradas: NuevaEntradaAuditoria[]) => void
 }
 
 const AdminContext = createContext<AdminContextValue | null>(null)
@@ -397,6 +405,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       cambiarEstado,
       resolverSolicitud,
       reiniciarDemo,
+      registrarEvento: registrar,
     }),
     [
       cuentas,
@@ -411,6 +420,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       cambiarEstado,
       resolverSolicitud,
       reiniciarDemo,
+      registrar,
     ],
   )
 

@@ -9,6 +9,8 @@ import { useAdmin } from '../state/adminStore'
 import { ROLES } from '../data/roles'
 import { describirAlcance } from '../data/territorios'
 import { pendientesParaFirmar, tienePermiso } from '../dominio/permisos'
+import { puedeAprobar } from '../dominio/misiones'
+import { useOperacion } from '../state/operacionStore'
 
 function formatoRestante(ms: number): string {
   const horas = Math.floor(ms / 3_600_000)
@@ -53,6 +55,7 @@ const KPIS: Kpi[] = [
 export function HomePage() {
   const auth = useAuth()
   const admin = useAdmin()
+  const op = useOperacion()
   const navigate = useNavigate()
   const [ahora, setAhora] = useState(() => Date.now())
 
@@ -74,6 +77,8 @@ export function HomePage() {
   )
 
   if (!user || !auth.sesion) return null
+
+  const misionesPorAprobar = cuenta ? op.misiones.filter((m) => puedeAprobar(cuenta, m)).length : 0
 
   return (
     <AppShell>
@@ -103,6 +108,18 @@ export function HomePage() {
             </div>
             <Button variante="ejecutivo" onClick={() => navigate('/PW-04/solicitudes')}>
               Revisar
+            </Button>
+          </Superficie>
+        )}
+
+        {misionesPorAprobar > 0 && (
+          <Superficie className="flex flex-wrap items-center justify-between gap-4 border-primario/25 px-6 py-5">
+            <p className="flex items-center gap-2 font-heading text-base font-extrabold text-grafito">
+              <Badge tono="pendiente">{misionesPorAprobar}</Badge>
+              Misiones de Coordinadores esperan aprobación
+            </p>
+            <Button variante="ejecutivo" onClick={() => navigate('/PW-05')}>
+              Ver misiones
             </Button>
           </Superficie>
         )}
@@ -158,8 +175,14 @@ export function HomePage() {
             >
               Ver: acceso denegado
             </Button>
-            <Button variante="ejecutivo-suave" onClick={() => admin.reiniciarDemo()}>
-              Reiniciar datos de PW-04
+            <Button
+              variante="ejecutivo-suave"
+              onClick={() => {
+                admin.reiniciarDemo()
+                op.reiniciarOperacion()
+              }}
+            >
+              Reiniciar datos del demo
             </Button>
           </div>
         </Superficie>

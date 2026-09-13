@@ -21,6 +21,28 @@ export type TipoEvento =
   | 'solicitud_creada'
   | 'solicitud_aprobada'
   | 'solicitud_rechazada'
+  // PW-03 — usuarios de la app
+  | 'usuario_bloqueado'
+  | 'usuario_desbloqueado'
+  | 'bloqueo_solicitado'
+  | 'alias_moderado'
+  | 'usuario_eliminado'
+  | 'usuarios_fusionados'
+  | 'impersonacion_inicio'
+  | 'impersonacion_fin'
+  | 'ajuste_balance_propuesto'
+  | 'ajuste_balance_resuelto'
+  // PW-05 — misiones
+  | 'mision_guardada'
+  | 'mision_enviada'
+  | 'mision_publicada'
+  | 'mision_rechazada'
+  | 'mision_pausada'
+  | 'mision_reanudada'
+  | 'mision_cancelada'
+  | 'mision_nueva_version'
+  | 'solicitud_operacion'
+  | 'solicitud_operacion_resuelta'
 
 export const ETIQUETA_EVENTO: Record<TipoEvento, string> = {
   cambio_permiso: 'Permiso modificado',
@@ -31,6 +53,26 @@ export const ETIQUETA_EVENTO: Record<TipoEvento, string> = {
   solicitud_creada: 'Ampliación enviada a aprobación',
   solicitud_aprobada: 'Ampliación aprobada',
   solicitud_rechazada: 'Ampliación rechazada',
+  usuario_bloqueado: 'Usuario bloqueado',
+  usuario_desbloqueado: 'Usuario desbloqueado',
+  bloqueo_solicitado: 'Bloqueo solicitado',
+  alias_moderado: 'Alias moderado',
+  usuario_eliminado: 'Cuenta eliminada (soft delete)',
+  usuarios_fusionados: 'Cuentas fusionadas',
+  impersonacion_inicio: 'Inicio de impersonación',
+  impersonacion_fin: 'Fin de impersonación',
+  ajuste_balance_propuesto: 'Ajuste de balance propuesto',
+  ajuste_balance_resuelto: 'Ajuste de balance resuelto',
+  mision_guardada: 'Misión guardada',
+  mision_enviada: 'Misión enviada a aprobación',
+  mision_publicada: 'Misión publicada',
+  mision_rechazada: 'Misión rechazada',
+  mision_pausada: 'Misión pausada',
+  mision_reanudada: 'Misión reanudada',
+  mision_cancelada: 'Misión cancelada',
+  mision_nueva_version: 'Nueva versión de misión',
+  solicitud_operacion: 'Solicitud de Coordinador',
+  solicitud_operacion_resuelta: 'Solicitud de Coordinador resuelta',
 }
 
 export interface EntradaAuditoria {
@@ -50,9 +92,17 @@ export interface EntradaAuditoria {
   // que `audit_logs` distinga los dos casos.
   conDobleFirma: boolean
   checkerId?: string
+  // Afectados fuera de PW-04: un usuario de la app (PW-03) o una misión (PW-05).
+  usuarioAppId?: string
+  misionId?: string
+  detalle?: string
+  // La impersonación es de severidad alta (wiki §Auditoría, `impersonation_logs`).
+  severidad?: 'normal' | 'alta'
   ip: string
   timestamp: number
 }
+
+export type NuevaEntradaAuditoria = Omit<EntradaAuditoria, 'id' | 'timestamp' | 'ip'>
 
 const DIA = 86_400_000
 const AHORA = new Date('2026-09-12T09:00:00').getTime()

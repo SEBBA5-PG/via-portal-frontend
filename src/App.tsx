@@ -16,6 +16,22 @@ import { CuentasPage } from './pages/pw04/CuentasPage'
 import { CrearCuentaPage } from './pages/pw04/CrearCuentaPage'
 import { FichaCuentaPage } from './pages/pw04/FichaCuentaPage'
 import { SolicitudesPage } from './pages/pw04/SolicitudesPage'
+import { OperacionProvider } from './state/operacionStore'
+import { UsuariosPage } from './pages/pw03/UsuariosPage'
+import { FichaUsuarioPage } from './pages/pw03/FichaUsuarioPage'
+import { MisionesPage } from './pages/pw05/MisionesPage'
+import { MisionFormPage } from './pages/pw05/MisionFormPage'
+import { DetalleMisionPage } from './pages/pw05/DetalleMisionPage'
+import type { ReactNode } from 'react'
+
+// Ruta de categoría: sesión + guard de la Matriz de Acceso ("ocultar no es autorizar").
+function Categoria({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <RutaCategoria categoriaId={id}>{children}</RutaCategoria>
+    </ProtectedRoute>
+  )
+}
 
 // Envuelve las rutas del flujo de acceso en el mismo cruce de opacidad/posición que ya usa
 // AuthLayout entre pasos — así ir de login a recuperar, a bloqueado, a sesión expirada o a sin
@@ -77,6 +93,14 @@ function RutasAnimadas() {
             </ProtectedRoute>
           }
         />
+        {/* PW-03 — Usuarios y ciclo de vida */}
+        <Route path="/PW-03" element={<Categoria id="PW-03"><UsuariosPage /></Categoria>} />
+        <Route path="/PW-03/usuario/:usuarioId" element={<Categoria id="PW-03"><FichaUsuarioPage /></Categoria>} />
+        {/* PW-05 — Misiones */}
+        <Route path="/PW-05" element={<Categoria id="PW-05"><MisionesPage /></Categoria>} />
+        <Route path="/PW-05/nueva" element={<Categoria id="PW-05"><MisionFormPage /></Categoria>} />
+        <Route path="/PW-05/mision/:misionId" element={<Categoria id="PW-05"><DetalleMisionPage /></Categoria>} />
+        <Route path="/PW-05/mision/:misionId/editar" element={<Categoria id="PW-05"><MisionFormPage /></Categoria>} />
         {/* PW-04 — Roles y permisos. Rutas explícitas antes del comodín de categoría: React
             Router prioriza el segmento estático, así que /PW-04 nunca cae en el placeholder. */}
         <Route
@@ -136,9 +160,11 @@ export default function App() {
   return (
     <AuthProvider>
       <AdminProvider>
-        <BrowserRouter>
-          <RutasAnimadas />
-        </BrowserRouter>
+        <OperacionProvider>
+          <BrowserRouter>
+            <RutasAnimadas />
+          </BrowserRouter>
+        </OperacionProvider>
       </AdminProvider>
     </AuthProvider>
   )
