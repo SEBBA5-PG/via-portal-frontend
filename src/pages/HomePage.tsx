@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppShell } from '../components/AppShell'
-import { Button } from '../components/ui/Button'
-import { Badge } from '../components/ui/Badge'
 import { Superficie, CabeceraSuperficie } from '../components/ui/Superficie'
 import { MapaCalorHuila } from '../components/MapaCalorHuila'
 import { useAuth } from '../state/authStore'
 import { useAdmin } from '../state/adminStore'
 import { ROLES } from '../data/roles'
 import { describirAlcance } from '../data/territorios'
-import { pendientesParaFirmar, tienePermiso } from '../dominio/permisos'
-import { puedeAprobar } from '../dominio/misiones'
+import { tienePermiso } from '../dominio/permisos'
 import { formatoEntero, formatoTendenciaPct } from '../dominio/metricas'
 import { nombrePlaya } from '../data/usuariosApp'
 import { obtenerResumenUsuariosApp, type ResumenUsuariosApp } from '../lib/usuariosAppApi'
-import { useOperacion } from '../state/operacionStore'
 
 // Paleta de las Playas del embudo (1 = Achira, más gente → 7 = Huila, menos gente): un
 // degradado propio, no el color primario del portal, para no confundir "Playa" con "estado".
@@ -36,26 +32,20 @@ function formatoRestante(ms: number): string {
 }
 
 /*
-  Home. PW-02 fija la regla que gobierna esta pantalla:
+  Home. PW-02 fija que el filtro es por PERMISO INDIVIDUAL del usuario, no por rol: se compone
+  en tiempo de carga según los permisos efectivos de la sesión, no una plantilla fija.
 
-    "el filtro es por PERMISO INDIVIDUAL del usuario, no por rol [...] dos usuarios con el
-     mismo rol pueden ver un home distinto. El home nunca es una plantilla fija con tarjetas
-     ocultas por rol: se compone en tiempo de carga según los permisos efectivos de la sesión."
+  Decisión de producto (2026-09-14): esta pantalla se reenfoca como un dashboard de gráficas y
+  estadísticas — es lo primero y lo único que se ve. Las bandejas de "por aprobar/por firmar"
+  (Doble Firma, misiones) y los atajos de estado del portal salieron de aquí a propósito; si
+  vuelven, es en su propio lugar (una bandeja de tareas), no mezclados con la analítica.
 
-  Y su alcance: "solo tarjetas KPI livianas (número + tendencia, sin gráficos ni filtros)" —
-  la analítica profunda vive en PW-17/M16, no aquí.
-
-  Las tarjetas de usuarios (`usuarios_total`, `usuarios_nuevos`) y el panel de más abajo SÍ son
+  Los datos de usuarios de la app (KPI, barras por territorio/Playa, mapa de calor) SÍ son
   reales: vienen de conexion-api (GET /api/app/usuarios/resumen, conexión 'app' → app_db), no
   de un mock local. Ese endpoint TODAVÍA no aplica TerritorialScope (a diferencia de PW-03) —
   un Coordinador Territorial ve el Huila entero aquí hasta que esa regla se porte al servidor.
-  El resto sigue siendo cifra de demo: qué KPIs son obligatorios para el MVP, cuáles van en
-  tiempo real y cuál es la fuente de verdad de cada uno sigue ABIERTO en M16 (Q-0631/Q-0633/Q-0635).
-
-  El panel "Dónde están tus usuarios" de más abajo estira un poco el "sin gráficos" de
-  PW-02 — un desglose con barritas no es un número suelto —, pero tampoco es la analítica
-  de series de tiempo y comparativas de PW-17. Vive aquí porque es lo que se pidió para
-  arrancar; si el home crece, esto es candidato a moverse a su propia vista.
+  El resto de KPI sigue siendo cifra de demo: qué KPIs son obligatorios para el MVP, cuáles van
+  en tiempo real y cuál es la fuente de verdad de cada uno sigue ABIERTO en M16 (Q-0631/Q-0633/Q-0635).
 */
 
 interface Kpi {
@@ -79,8 +69,6 @@ const KPIS_ESTATICOS: Kpi[] = [
 export function HomePage() {
   const auth = useAuth()
   const admin = useAdmin()
-  const op = useOperacion()
-  const navigate = useNavigate()
   const [ahora, setAhora] = useState(() => Date.now())
 
   useEffect(() => {
@@ -165,14 +153,8 @@ export function HomePage() {
     () => (cuenta ? [...kpisUsuarios, ...KPIS_ESTATICOS.filter((kpi) => tienePermiso(cuenta, kpi.permiso))] : []),
     [cuenta, kpisUsuarios],
   )
-  const porFirmar = useMemo(
-    () => (cuenta ? pendientesParaFirmar(admin.solicitudes, cuenta) : []),
-    [cuenta, admin.solicitudes],
-  )
 
   if (!user || !auth.sesion) return null
-
-  const misionesPorAprobar = cuenta ? op.misiones.filter((m) => puedeAprobar(cuenta, m)).length : 0
 
   return (
     <AppShell>
@@ -187,56 +169,6 @@ export function HomePage() {
             {formatoRestante(auth.sesion.expiraEn - ahora)}
           </p>
         </header>
-
-        {porFirmar.length > 0 && (
-          <Superficie className="flex flex-wrap items-center justify-between gap-4 border-ambar/25 px-6 py-5">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 font-heading text-base font-extrabold text-grafito">
-                <Badge tono="alerta">{porFirmar.length}</Badge>
-                Ampliaciones de permiso esperan tu firma
-              </p>
-              <p className="mt-1 max-w-xl text-xs leading-relaxed text-texto-suave">
-                Son cambios que otro Superadministrador propuso y no puede aprobar por su cuenta.
-                Mientras esperan, las cuentas afectadas siguen operando con su valor anterior.
-              </p>
-            </div>
-            <Button variante="ejecutivo" onClick={() => navigate('/PW-04/solicitudes')}>
-              Revisar
-            </Button>
-          </Superficie>
-        )}
-
-        {misionesPorAprobar > 0 && (
-          <Superficie className="flex flex-wrap items-center justify-between gap-4 border-primario/25 px-6 py-5">
-            <p className="flex items-center gap-2 font-heading text-base font-extrabold text-grafito">
-              <Badge tono="pendiente">{misionesPorAprobar}</Badge>
-              Misiones de Coordinadores esperan aprobación
-            </p>
-            <Button variante="ejecutivo" onClick={() => navigate('/PW-05')}>
-              Ver misiones
-            </Button>
-          </Superficie>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visibles.map((kpi) => (
-            <Link
-              key={kpi.clave}
-              to={kpi.destino}
-              className="rounded-[18px] outline-none focus-visible:ring-4 focus-visible:ring-ambar/40"
-            >
-              <Superficie className="h-full px-6 py-5 transition-colors hover:bg-surface-sunken">
-                <p className="text-xs font-bold uppercase tracking-wide text-texto-suave">
-                  {kpi.etiqueta}
-                </p>
-                <p className="mt-2 font-heading text-3xl font-extrabold tracking-tight text-grafito">
-                  {kpi.valor}
-                </p>
-                {kpi.tendencia && <p className="mt-1 text-xs text-primario">{kpi.tendencia}</p>}
-              </Superficie>
-            </Link>
-          ))}
-        </div>
 
         {puedeVerUsuarios && (cargandoResumen || resumenApp) && (
           <Superficie>
@@ -328,48 +260,25 @@ export function HomePage() {
           </Superficie>
         )}
 
-        <Superficie>
-          <CabeceraSuperficie
-            titulo="Estado del portal"
-            descripcion="PW-01 (Acceso y sesión) y PW-04 (Roles y permisos) están construidos. El resto de las categorías se levantan una por una; el menú ya refleja la Matriz de Acceso por Rol real para tu perfil."
-          />
-          <div className="flex flex-wrap gap-3 px-6 py-5">
-            {/* PW-04 está Oculto para Coordinador Territorial: no se enlaza desde aquí
-                tampoco. Ofrecer el atajo y que la ruta lo rebote sería el mismo error que
-                ocultar en el menú sin denegar en el servidor, al revés. */}
-            {user.rol !== 'C' && (
-              <Button variante="ejecutivo-suave" onClick={() => navigate('/PW-04')}>
-                Ir a Roles y permisos
-              </Button>
-            )}
-            <Button variante="ejecutivo-suave" onClick={() => navigate('/sesion-expirada')}>
-              Ver: sesión expirada
-            </Button>
-            <Button
-              variante="ejecutivo-suave"
-              onClick={() => navigate('/bloqueado', { state: { hasta: Date.now() + 15_000 } })}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibles.map((kpi) => (
+            <Link
+              key={kpi.clave}
+              to={kpi.destino}
+              className="rounded-[18px] outline-none focus-visible:ring-4 focus-visible:ring-ambar/40"
             >
-              Ver: bloqueo por intentos
-            </Button>
-            <Button
-              variante="ejecutivo-suave"
-              onClick={() =>
-                navigate('/sin-permiso', { state: { categoriaNombre: 'Configuración global del sistema' } })
-              }
-            >
-              Ver: acceso denegado
-            </Button>
-            <Button
-              variante="ejecutivo-suave"
-              onClick={() => {
-                admin.reiniciarDemo()
-                op.reiniciarOperacion()
-              }}
-            >
-              Reiniciar datos del demo
-            </Button>
-          </div>
-        </Superficie>
+              <Superficie className="h-full px-6 py-5 transition-colors hover:bg-surface-sunken">
+                <p className="text-xs font-bold uppercase tracking-wide text-texto-suave">
+                  {kpi.etiqueta}
+                </p>
+                <p className="mt-2 font-heading text-3xl font-extrabold tracking-tight text-grafito">
+                  {kpi.valor}
+                </p>
+                {kpi.tendencia && <p className="mt-1 text-xs text-primario">{kpi.tendencia}</p>}
+              </Superficie>
+            </Link>
+          ))}
+        </div>
       </div>
     </AppShell>
   )
