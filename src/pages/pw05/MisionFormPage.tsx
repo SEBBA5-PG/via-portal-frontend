@@ -137,8 +137,8 @@ export function MisionFormPage() {
                 paso === i + 1
                   ? 'border-primario/45 bg-primario/[0.16] text-primario'
                   : i + 1 < paso
-                    ? 'border-white/15 bg-white/[0.05] text-grafito/80'
-                    : 'border-white/[0.07] text-texto-suave/70'
+                    ? 'border-borde bg-surface-sunken text-grafito/80'
+                    : 'border-borde text-texto-suave/70'
               }`}
             >
               {i + 1}. {nombre}
@@ -169,7 +169,7 @@ export function MisionFormPage() {
       )}
 
       {errores.length > 0 && (
-        <div role="alert" className="rounded-[16px] border border-red-400/25 bg-red-500/10 px-5 py-3 text-sm text-red-200">
+        <div role="alert" className="rounded-[16px] border border-peligro/25 bg-peligro/[0.07] px-5 py-3 text-sm text-peligro">
           {errores.map((e) => (
             <p key={e}>· {e}</p>
           ))}
@@ -280,7 +280,7 @@ export function MisionFormPage() {
             </div>
 
             {draft.familia === 'digital' && draft.subtipo === 'encuesta' && (
-              <div className="rounded-[16px] border border-red-400/25 bg-red-500/10 px-5 py-4 text-sm text-red-200 sm:col-span-2">
+              <div className="rounded-[16px] border border-peligro/25 bg-peligro/[0.07] px-5 py-4 text-sm text-peligro sm:col-span-2">
                 Vincular una encuesta arrastra el BLOQUEANTE legal de M13 Q-0535 (Ley 1581, dato sensible de opinión
                 política): los resultados no se podrán consultar hasta que se asigne responsable y se resuelva.
               </div>
@@ -305,7 +305,7 @@ export function MisionFormPage() {
                     </div>
                   </Campo>
                 </div>
-                <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-texto-suave sm:col-span-2">
+                <div className="rounded-[16px] border border-borde bg-surface-sunken px-5 py-4 text-sm text-texto-suave sm:col-span-2">
                   <p className="font-heading font-extrabold text-grafito">Geocerca: {RADIO_GEOCERCA_METROS} m, fija</p>
                   <p className="mt-1 text-xs">
                     Radio no editable por misión: es constante del sistema ([DECISIÓN BORRADOR] en el esquema de misiones). El
@@ -373,7 +373,7 @@ export function MisionFormPage() {
                 </div>
               </Campo>
             </div>
-            <div className="rounded-[16px] border border-white/10 bg-white/[0.03] px-5 py-4 text-sm text-texto-suave">
+            <div className="rounded-[16px] border border-borde bg-surface-sunken px-5 py-4 text-sm text-texto-suave">
               <p className="font-heading font-extrabold text-grafito">Canal: solo Usuario Activo</p>
               <p className="mt-1 text-xs">Las misiones requieren la app; Inscrito Activo queda siempre fuera.</p>
             </div>

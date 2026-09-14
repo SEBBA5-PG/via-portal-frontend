@@ -21,7 +21,7 @@ function IconoFamilia({ familia }: { familia: Familia }) {
   return (
     <span
       aria-hidden="true"
-      className="grid size-11 shrink-0 place-items-center rounded-[14px] border border-white/10 bg-primario/[0.12] text-primario"
+      className="grid size-11 shrink-0 place-items-center rounded-[14px] border border-borde bg-primario/[0.12] text-primario"
     >
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         {familia === 'digital' && (

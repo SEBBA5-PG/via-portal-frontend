@@ -101,7 +101,7 @@ export function MisionesPage() {
           />
           <ul>
             {porAprobar.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] px-6 py-4 last:border-0">
+              <li key={m.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-borde px-6 py-4 last:border-0">
                 <div className="min-w-0">
                   <p className="font-heading text-sm font-extrabold text-grafito">{m.nombre}</p>
                   <p className="mt-1 text-xs text-texto-suave">
@@ -130,7 +130,7 @@ export function MisionesPage() {
           />
           <ul>
             {solicitudesVisibles.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] px-6 py-4 last:border-0">
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-borde px-6 py-4 last:border-0">
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 font-heading text-sm font-extrabold text-grafito">
                     {TIPOS_SOLICITUD_OPERACION[s.tipo]} · {nombreMision(s.objetivoId)}
@@ -155,7 +155,7 @@ export function MisionesPage() {
       )}
 
       <Superficie className="overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-white/[0.07] px-6 py-4">
+        <div className="flex flex-col gap-4 border-b border-borde px-6 py-4">
           <GrupoChips etiqueta="Categoría">
             {CATEGORIAS_LISTADO.map((c) => (
               <Chip key={c} activo={categorias.includes(c)} onClick={() => setCategorias(alternar(categorias, c))}>
@@ -284,7 +284,7 @@ function Chip({ activo, onClick, children }: { activo: boolean; onClick: () => v
       aria-pressed={activo}
       onClick={onClick}
       className={`rounded-full border px-3 py-1.5 font-heading text-xs font-bold transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ambar/40 ${
-        activo ? 'border-primario/45 bg-primario/[0.16] text-primario' : 'border-white/10 bg-white/[0.03] text-texto-suave hover:text-grafito'
+        activo ? 'border-primario/45 bg-primario/[0.16] text-primario' : 'border-borde bg-surface-sunken text-texto-suave hover:text-grafito'
       }`}
     >
       {children}

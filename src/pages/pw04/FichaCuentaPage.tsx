@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Navigate, useParams } from 'react-router-dom'
 import { PW04Layout } from './PW04Layout'
 import { EditorPermisos } from './EditorPermisos'
 import { SelectorTerritorio } from './SelectorTerritorio'
@@ -8,10 +8,12 @@ import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { SelectField } from '../../components/ui/SelectField'
 import { Modal } from '../../components/ui/Modal'
+import { BotonVolver } from '../../components/ui/BotonVolver'
 import { Superficie, CabeceraSuperficie } from '../../components/ui/Superficie'
 import { EstadoVacio } from '../../components/ui/EstadoVacio'
 import { useAuth } from '../../state/authStore'
 import { useAdmin } from '../../state/adminStore'
+import { useNavegacionGuardia } from '../../state/navegacionGuardiaStore'
 import { ROLES, type Rol } from '../../data/roles'
 import {
   ESTADOS_CUENTA,
@@ -54,55 +56,76 @@ export function FichaCuentaPage() {
   const { cuentaId } = useParams()
   const auth = useAuth()
   const admin = useAdmin()
-  const navigate = useNavigate()
   const [pestana, setPestana] = useState<Pestana>('identidad')
 
   const user = auth.usuarioActual
   const cuentaActor = user ? admin.cuentaPorId(user.id) : undefined
   const cuenta = cuentaId ? admin.cuentaPorId(cuentaId) : undefined
 
-  if (!user || !cuentaActor) return null
-  if (!cuenta) return <Navigate to="/PW-04" replace />
+  if (!user) return null
+  // Las cuentas se cargan async desde el backend: mientras tanto, `cuentaActor` puede no
+  // haber resuelto todavía — no lo tratamos igual que "no existe esta ficha".
+  if (admin.cargandoCuentas) return null
+  if (!cuentaActor || !cuenta) return <Navigate to="/PW-04" replace />
 
   const gestionable = puedeGestionarCuenta(cuentaActor, cuenta)
   const editaPermisos = puedeEditarPermisos(cuentaActor, cuenta)
   const vePII = tienePermiso(cuentaActor, 'users:view_pii')
   const veAuditoria = tienePermiso(cuentaActor, 'audit:view')
-  const { ampliados, reducidos } = diferenciasConPlantilla(cuenta)
 
   return (
     <PW04Layout
       titulo={cuenta.nombre}
-      descripcion={
-        <>
-          {ROLES[cuenta.rol]} · {describirAlcance(cuenta.territorioIds)} · creada el{' '}
-          {cuenta.fechaCreacion} por {nombreDeCuenta(cuenta.creadoPor, admin.cuentas)}
-        </>
-      }
+      mostrarSolapas={false}
       acciones={
         <>
-          <Badge tono={TONO_ESTADO[cuenta.estado]}>{ESTADOS_CUENTA[cuenta.estado]}</Badge>
-          {cuenta.esRaiz && <Badge tono="alerta">Cuenta raíz</Badge>}
-          {ampliados.length > 0 && <Badge tono="alerta">+{ampliados.length} ampliados</Badge>}
-          {reducidos.length > 0 && <Badge tono="neutro">−{reducidos.length} reducidos</Badge>}
-          <Button variante="ejecutivo-suave" onClick={() => navigate('/PW-04')}>
-            Volver al listado
-          </Button>
+          {gestionable && (
+            <button
+              type="button"
+              onClick={() => setPestana('identidad')}
+              title="Editar cuenta"
+              aria-label="Editar cuenta"
+              className="grid size-9 shrink-0 place-items-center rounded-full border border-borde text-texto-suave outline-none transition-colors hover:text-primario focus-visible:ring-4 focus-visible:ring-ambar/40"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          )}
         </>
       }
     >
+      {/* Botón de volver, reutilizable entre pantallas de detalle — vive arriba a la
+          izquierda, por encima del contenido, en vez de mezclado entre las acciones de la
+          cabecera (observación 2026-09-14). */}
+      <div className="flex">
+        <BotonVolver a="/PW-04" etiqueta="Cuentas administrativas" />
+      </div>
+
       {cuenta.esRaiz && (
-        <Superficie tono="sutil" className="border-ambar/25 bg-ambar/[0.06] px-6 py-4">
-          <p className="text-sm leading-relaxed text-ambar">
-            Cuenta raíz: nace con el despliegue del sistema, tiene todos los permisos y es
-            irrevocable — nunca se le puede quitar <code>accounts:create</code> ni{' '}
-            <code>permissions:grant</code>. Es de uso exclusivo para el arranque inicial y
-            emergencias extremas, no para el día a día, y por eso no se edita desde aquí.
+        <Superficie tono="sutil" className="px-6 py-4">
+          <p className="text-sm leading-relaxed text-texto-suave">
+            Esta es la cuenta raíz: nació con la instalación del sistema, tiene todos los
+            permisos y no se puede editar ni desactivar desde aquí. Es solo para el arranque
+            inicial y emergencias, no para el uso diario.
           </p>
         </Superficie>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      {/* Menú-barra de pestañas, mismo tratamiento sólido que las solapas de categoría
+          (observación 12): pista con fondo sutil, la activa se rellena de color de marca. */}
+      <div className="inline-flex w-fit flex-wrap gap-1 rounded-full bg-surface-sunken p-1.5">
         <SolapaPestana activa={pestana === 'identidad'} onClick={() => setPestana('identidad')}>
           Identidad y rol
         </SolapaPestana>
@@ -144,10 +167,8 @@ function SolapaPestana({
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className={`rounded-full border px-4 py-2 font-heading text-sm font-bold transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ambar/40 ${
-        activa
-          ? 'border-primario/40 bg-primario/[0.14] text-primario'
-          : 'border-white/10 bg-white/[0.03] text-texto-suave hover:text-grafito'
+      className={`rounded-full px-4 py-2 font-heading text-sm font-bold transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ambar/40 ${
+        activa ? 'bg-primario text-white shadow-sm' : 'text-texto-suave hover:text-grafito'
       }`}
     >
       {children}
@@ -175,8 +196,33 @@ function PestanaIdentidad({
   const actor = admin.cuentaPorId(actorId)
   if (!cuenta || !actor) return null
 
+  const { ampliados, reducidos } = diferenciasConPlantilla(cuenta)
+
   return (
     <>
+      <Superficie tono="sutil" className="flex flex-wrap items-center gap-2 px-6 py-4">
+        <Badge tono={TONO_ESTADO[cuenta.estado]}>{ESTADOS_CUENTA[cuenta.estado]}</Badge>
+        {cuenta.esRaiz && (
+          <Badge tono="alerta" sinIcono>
+            Cuenta raíz
+          </Badge>
+        )}
+        {ampliados.length > 0 && (
+          <Badge tono="alerta" sinIcono>
+            +{ampliados.length} ampliados
+          </Badge>
+        )}
+        {reducidos.length > 0 && (
+          <Badge tono="neutro" sinIcono>
+            −{reducidos.length} reducidos
+          </Badge>
+        )}
+        <span className="ml-auto text-xs text-texto-suave">
+          {ROLES[cuenta.rol]} · {describirAlcance(cuenta.territorioIds)} · creada el {cuenta.fechaCreacion} por{' '}
+          {nombreDeCuenta(cuenta.creadoPor, admin.cuentas)}
+        </span>
+      </Superficie>
+
       <Superficie>
         <CabeceraSuperficie
           titulo="Datos de identidad"
@@ -205,7 +251,7 @@ function PestanaIdentidad({
           />
         </div>
         {!vePII && (
-          <p className="border-t border-white/[0.06] px-6 py-3 text-xs text-texto-suave">
+          <p className="border-t border-borde px-6 py-3 text-xs text-texto-suave">
             La PII aparece enmascarada porque tu cuenta no tiene <code>users:view_pii</code>. En
             producción el enmascaramiento lo aplica el servidor: el dato completo no llega al
             navegador.
@@ -234,11 +280,17 @@ function PestanaIdentidad({
           </div>
           <div>
             <p className="mb-2 font-heading text-sm font-bold text-grafito">Alcance territorial</p>
-            <SelectorTerritorio
-              seleccionados={cuenta.territorioIds}
-              soloLectura={!gestionable}
-              onCambiar={(ids) => admin.editarIdentidad(actorId, cuentaId, { territorioIds: ids })}
-            />
+            {gestionable ? (
+              <SelectorTerritorio
+                seleccionados={cuenta.territorioIds}
+                soloLectura={!gestionable}
+                onCambiar={(ids) => admin.editarIdentidad(actorId, cuentaId, { territorioIds: ids })}
+              />
+            ) : (
+              <div className="rounded-control bg-[var(--side-bg)] px-4 py-3 text-sm font-semibold text-[var(--side-texto-fuerte)]">
+                {describirAlcance(cuenta.territorioIds)}
+              </div>
+            )}
           </div>
         </div>
       </Superficie>
@@ -354,14 +406,25 @@ function PestanaPermisos({
     return borrador ?? permisosEfectivos(cuenta)
   }, [cuenta, borrador])
 
-  if (!cuenta) return null
+  const cambios: CambioPropuesto[] = cuenta
+    ? Object.entries(valores)
+        .map(([clave, valorNuevo]) => ({ clave, valorNuevo }))
+        .filter((c) => permisosEfectivos(cuenta)[c.clave] !== c.valorNuevo)
+    : []
 
-  const cambios: CambioPropuesto[] = Object.entries(valores)
-    .map(([clave, valorNuevo]) => ({ clave, valorNuevo }))
-    .filter((c) => permisosEfectivos(cuenta)[c.clave] !== c.valorNuevo)
-
-  const { inmediatos, requierenFirma } = separarCambios(cuenta, cambios)
+  const { inmediatos, requierenFirma } = cuenta
+    ? separarCambios(cuenta, cambios)
+    : { inmediatos: [], requierenFirma: [] }
   const hayCambios = inmediatos.length + requierenFirma.length > 0
+
+  const { setDirty } = useNavegacionGuardia()
+  useEffect(() => {
+    setDirty(hayCambios)
+    return () => setDirty(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hayCambios])
+
+  if (!cuenta) return null
 
   return (
     <>
@@ -424,7 +487,7 @@ function PestanaPermisos({
         abierto={confirmando}
         ancho="amplio"
         titulo={requierenFirma.length > 0 ? 'Revisar antes de enviar' : 'Confirmar cambios'}
-        descripcion="Q-1255 evalúa cada permiso por separado dentro de una misma edición: las reducciones se aplican de inmediato y solo las ampliaciones esperan un segundo firmante."
+        descripcion="Cada permiso se evalúa por separado dentro de esta misma edición: las reducciones se aplican de inmediato y solo las ampliaciones esperan un segundo firmante."
         onCerrar={() => setConfirmando(false)}
         acciones={
           <>
@@ -495,7 +558,7 @@ function ListaCambios({
       <ul className="mt-3 flex flex-col gap-1.5">
         {cambios.map((cambio) => (
           <li key={cambio.clave} className="flex flex-wrap items-center gap-2 text-xs">
-            <span className={cambio.valorNuevo ? 'text-[#8fd382]' : 'text-texto-suave'}>
+            <span className={cambio.valorNuevo ? 'text-exito' : 'text-texto-suave'}>
               {cambio.valorNuevo ? '＋' : '−'}
             </span>
             <span className="text-grafito/85">
@@ -552,7 +615,7 @@ function PestanaActividad({ cuentaId, permitido }: { cuentaId: string; permitido
         {entradas.map((entrada) => {
           const permiso = entrada.permisoClave ? permisoPorClave(entrada.permisoClave) : undefined
           return (
-            <li key={entrada.id} className="border-b border-white/[0.04] px-6 py-4 last:border-0">
+            <li key={entrada.id} className="border-b border-borde px-6 py-4 last:border-0">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tono={entrada.conDobleFirma ? 'alerta' : 'neutro'}>
                   {ETIQUETA_EVENTO[entrada.tipo]}

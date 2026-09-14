@@ -182,7 +182,7 @@ export function DetalleMisionPage() {
           />
           <ul>
             {pendientes.map((s) => (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] px-6 py-4 last:border-0">
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-borde px-6 py-4 last:border-0">
                 <div className="min-w-0">
                   <p className="font-heading text-sm font-extrabold text-grafito">
                     {TIPOS_SOLICITUD_OPERACION[s.tipo]} · {s.motivo}
@@ -290,7 +290,7 @@ export function DetalleMisionPage() {
           <CabeceraSuperficie titulo="Historial" descripcion="Todo cambio de estado queda en audit_logs." />
           <ul>
             {historial.map((e) => (
-              <li key={e.id} className="border-b border-white/[0.04] px-6 py-3 last:border-0 text-xs text-texto-suave">
+              <li key={e.id} className="border-b border-borde px-6 py-3 last:border-0 text-xs text-texto-suave">
                 <Badge tono="neutro">{ETIQUETA_EVENTO[e.tipo]}</Badge> {formatoFechaHora(e.timestamp)} · {nombreDeCuenta(e.actorId, admin.cuentas)}
                 {e.checkerId && ` · resuelto por ${nombreDeCuenta(e.checkerId, admin.cuentas)}`}
                 {e.detalle && ` · ${e.detalle}`}
@@ -392,8 +392,8 @@ export function DetalleMisionPage() {
           {/* ESQ §Cancelación: separar lo que se revierte de lo que no. */}
           <div className="grid gap-3 sm:grid-cols-3">
             <Impacto valor={impacto.inscritos} etiqueta="Inscritos afectados" tono="text-grafito" />
-            <Impacto valor={impacto.enRevision} etiqueta="En revisión → cancelada_sin_revisar, sin recompensa" tono="text-red-300" />
-            <Impacto valor={impacto.aprobadas} etiqueta="Aprobadas: no se revierten, el ledger no se toca" tono="text-[#8fd382]" />
+            <Impacto valor={impacto.enRevision} etiqueta="En revisión → cancelada_sin_revisar, sin recompensa" tono="text-peligro" />
+            <Impacto valor={impacto.aprobadas} etiqueta="Aprobadas: no se revierten, el ledger no se toca" tono="text-exito" />
           </div>
           <Marcable
             marcado={confirmado}
@@ -519,7 +519,7 @@ function Aviso({ tono, children }: { tono: 'info' | 'alerta' | 'peligro'; childr
   const clases = {
     info: 'border-primario/25 bg-primario/[0.07] text-primario',
     alerta: 'border-ambar/25 bg-ambar/[0.07] text-ambar',
-    peligro: 'border-red-400/25 bg-red-500/10 text-red-200',
+    peligro: 'border-peligro/25 bg-peligro/[0.07] text-peligro',
   }
   return (
     <div role="status" className={`rounded-[16px] border px-5 py-3.5 text-sm leading-relaxed ${clases[tono]}`}>
@@ -548,7 +548,7 @@ function Metrica({ valor, etiqueta }: { valor: number; etiqueta: string }) {
 
 function Impacto({ valor, etiqueta, tono }: { valor: number; etiqueta: string; tono: string }) {
   return (
-    <div className="rounded-[14px] border border-white/10 bg-white/[0.03] px-4 py-3">
+    <div className="rounded-[14px] border border-borde bg-surface-sunken px-4 py-3">
       <p className={`font-heading text-2xl font-extrabold ${tono}`}>{valor.toLocaleString('es-CO')}</p>
       <p className="mt-1 text-xs leading-snug text-texto-suave">{etiqueta}</p>
     </div>

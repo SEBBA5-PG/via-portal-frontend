@@ -21,8 +21,8 @@ export function Marcable({
   return (
     <label
       className={`flex items-start gap-3 rounded-[14px] border px-4 py-3 transition-colors ${
-        marcado ? 'border-primario/40 bg-primario/[0.08]' : 'border-white/10 bg-white/[0.02]'
-      } ${deshabilitado ? 'cursor-not-allowed opacity-55' : 'cursor-pointer hover:bg-white/[0.05]'}`}
+        marcado ? 'border-primario/40 bg-primario-tint' : 'border-borde bg-white'
+      } ${deshabilitado ? 'cursor-not-allowed opacity-55' : 'cursor-pointer hover:bg-surface-sunken'}`}
     >
       <input
         type={tipo}
@@ -30,7 +30,7 @@ export function Marcable({
         checked={marcado}
         disabled={deshabilitado}
         onChange={(e) => onCambiar(e.target.checked)}
-        className="mt-0.5 size-4 shrink-0 accent-[#78b4ff]"
+        className="mt-0.5 size-4 shrink-0 accent-primario"
       />
       <span className="min-w-0">
         <span className="block text-sm font-semibold text-grafito">{etiqueta}</span>

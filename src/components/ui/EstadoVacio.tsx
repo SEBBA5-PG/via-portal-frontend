@@ -25,7 +25,7 @@ export function EstadoVacio({
     <div className="flex flex-col items-center px-6 py-16 text-center">
       <div
         aria-hidden="true"
-        className="mb-5 grid size-12 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-texto-suave"
+        className="mb-5 grid size-12 place-items-center rounded-full border border-borde bg-surface-sunken text-texto-suave"
       >
         {motivo === 'sin-resultados' ? (
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">

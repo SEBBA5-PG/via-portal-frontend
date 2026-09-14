@@ -61,7 +61,7 @@ export function SolicitudesPage() {
   return (
     <PW04Layout
       titulo="Doble Firma"
-      descripcion="Solo las ampliaciones de permiso llegan aquí. Reducir un permiso se aplica de inmediato y nunca genera una solicitud: restringir acceso no es la acción sensible (Q-1255)."
+      descripcion="Solo las ampliaciones de permiso llegan aquí. Reducir un permiso se aplica de inmediato y nunca genera una solicitud: restringir acceso no es la acción sensible."
     >
       <Superficie>
         <CabeceraSuperficie
@@ -162,7 +162,7 @@ function TarjetaSolicitud({
   const objetivo = admin.cuentaPorId(solicitud.cuentaObjetivoId)
 
   return (
-    <li className="border-b border-white/[0.05] px-6 py-5 last:border-0">
+    <li className="border-b border-borde px-6 py-5 last:border-0">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -173,7 +173,11 @@ function TarjetaSolicitud({
                   ? 'Aprobada'
                   : 'Rechazada'}
             </Badge>
-            {permiso?.dobleFirmaSiempre && <Badge tono="alerta">Doble Firma en ambas direcciones</Badge>}
+            {permiso?.dobleFirmaSiempre && (
+              <Badge tono="alerta" sinIcono>
+                Doble Firma en ambas direcciones
+              </Badge>
+            )}
             <span className="text-xs text-texto-suave">{formatoFechaHora(solicitud.timestamp)}</span>
           </div>
 
@@ -181,11 +185,11 @@ function TarjetaSolicitud({
             {permiso?.etiqueta ?? solicitud.permisoClave}
           </p>
           <p className="mt-0.5 text-xs text-texto-suave">
-            <code>{solicitud.permisoClave}</code> · sobre{' '}
+            Sobre{' '}
             {objetivo ? (
               <Link
                 to={`/PW-04/cuenta/${objetivo.id}`}
-                className="text-primario underline-offset-2 hover:underline"
+                className="font-semibold text-primario underline-offset-2 hover:underline"
               >
                 {objetivo.nombre}
               </Link>
@@ -203,16 +207,18 @@ function TarjetaSolicitud({
             <ValorEstado etiqueta="Si se aprueba" concedido={solicitud.valorNuevo} destacado />
           </div>
 
-          <p className="mt-4 text-xs text-texto-suave">
-            Propuesto por{' '}
-            <strong className="text-grafito/85">{nombreDeCuenta(solicitud.makerId, admin.cuentas)}</strong>
-            {solicitud.checkerId && (
-              <> · firmado por {nombreDeCuenta(solicitud.checkerId, admin.cuentas)}</>
-            )}
-          </p>
-          <p className="mt-1 text-xs italic text-grafito/70">"{solicitud.motivo}"</p>
+          <div className="mt-4 rounded-[12px] bg-surface-sunken px-4 py-3">
+            <p className="text-xs text-texto-suave">
+              Propuesto por{' '}
+              <strong className="text-grafito/85">{nombreDeCuenta(solicitud.makerId, admin.cuentas)}</strong>
+              {solicitud.checkerId && (
+                <> · firmado por {nombreDeCuenta(solicitud.checkerId, admin.cuentas)}</>
+              )}
+            </p>
+            <p className="mt-1.5 text-sm text-grafito/85">"{solicitud.motivo}"</p>
+          </div>
           {solicitud.motivoRechazo && (
-            <p className="mt-2 rounded-[12px] border border-red-400/25 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+            <p className="mt-2 rounded-[12px] border border-peligro/25 bg-peligro/10 px-3 py-2 text-xs text-peligro">
               Rechazada: {solicitud.motivoRechazo}
             </p>
           )}
@@ -253,11 +259,11 @@ function ValorEstado({
   return (
     <div
       className={`rounded-[14px] border px-4 py-2.5 ${
-        destacado ? 'border-primario/35 bg-primario/[0.09]' : 'border-white/10 bg-white/[0.03]'
+        destacado ? 'border-primario/35 bg-primario/[0.09]' : 'border-borde bg-surface-sunken'
       }`}
     >
       <p className="text-[0.7rem] font-bold uppercase tracking-wide text-texto-suave">{etiqueta}</p>
-      <p className={`mt-0.5 font-heading text-sm font-extrabold ${concedido ? 'text-[#8fd382]' : 'text-grafito/60'}`}>
+      <p className={`mt-0.5 font-heading text-sm font-extrabold ${concedido ? 'text-exito' : 'text-grafito/60'}`}>
         {concedido ? 'Concedido' : 'No concedido'}
       </p>
     </div>

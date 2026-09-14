@@ -111,7 +111,7 @@ export function UsuariosPage() {
             {pendientesBloqueo.map((s) => (
               <li
                 key={s.id}
-                className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.05] px-6 py-4 last:border-0"
+                className="flex flex-wrap items-center justify-between gap-4 border-b border-borde px-6 py-4 last:border-0"
               >
                 <div className="min-w-0">
                   <p className="font-heading text-sm font-extrabold text-grafito">
@@ -155,7 +155,7 @@ export function UsuariosPage() {
                   {s.estado === 'pendiente' ? 'Pendiente' : s.estado === 'aprobada' ? 'Aprobada' : 'Rechazada'}
                 </Badge>
                 <span className="text-grafito/85">{aliasDe(s.objetivoId)}</span> · {s.motivo}
-                {s.motivoRechazo && <span className="text-red-300">— {s.motivoRechazo}</span>}
+                {s.motivoRechazo && <span className="text-peligro">— {s.motivoRechazo}</span>}
               </li>
             ))}
           </ul>
@@ -163,14 +163,14 @@ export function UsuariosPage() {
       )}
 
       <Superficie className="overflow-hidden">
-        <div className="flex flex-wrap items-end gap-3 border-b border-white/[0.07] px-6 py-4">
+        <div className="flex flex-wrap items-end gap-3 border-b border-borde px-6 py-4">
           <label className="flex flex-col gap-1.5">
             <span className="font-heading text-xs font-bold text-texto-suave">Buscar</span>
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder={vePII ? 'Alias, nombre o cédula' : 'Alias o nombre'}
-              className="h-10 w-52 rounded-full border-[1.5px] border-borde/40 bg-fondo/[0.05] px-4 text-sm text-grafito outline-none transition placeholder:text-texto-suave/70 focus:border-primario focus:ring-4 focus:ring-ambar/30"
+              className="h-10 w-52 rounded-full border-[1.5px] border-borde bg-surface-sunken px-4 text-sm text-grafito outline-none transition placeholder:text-texto-suave/70 focus:border-primario focus:ring-4 focus:ring-ambar/30"
             />
           </label>
           <FiltroSelect

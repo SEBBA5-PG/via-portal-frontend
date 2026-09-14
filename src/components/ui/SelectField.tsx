@@ -14,8 +14,8 @@ interface Props extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'children'
 }
 
 // Mismo lenguaje visual que TextField (alto 48, píldora, anillo ámbar al foco). Las
-// <option> se pintan con el color del sistema operativo, así que llevan fondo oscuro
-// explícito: sobre el vidrio del portal, el blanco por defecto se lee como un error.
+// <option> se pintan con el color del sistema operativo, así que llevan fondo explícito
+// para no depender de él.
 export function SelectField({ etiqueta, opciones, ayuda, error, id, className = '', ...props }: Props) {
   const idGenerado = useId()
   const selectId = id ?? idGenerado
@@ -30,8 +30,8 @@ export function SelectField({ etiqueta, opciones, ayuda, error, id, className = 
         id={selectId}
         aria-describedby={ayuda && !error ? ayudaId : undefined}
         aria-invalid={error ? true : undefined}
-        className={`h-12 w-full appearance-none rounded-full border-[1.5px] bg-fondo/[0.05] px-5 text-base text-grafito outline-none transition focus:border-primario focus:ring-4 focus:ring-ambar/30 ${
-          error ? 'border-red-600' : 'border-borde/40'
+        className={`h-12 w-full appearance-none rounded-full border bg-white px-5 text-base text-grafito outline-none transition focus:border-primario focus:ring-4 focus:ring-ambar/30 ${
+          error ? 'border-peligro' : 'border-borde'
         } ${className}`}
         {...props}
       >
@@ -40,7 +40,7 @@ export function SelectField({ etiqueta, opciones, ayuda, error, id, className = 
             key={opcion.valor}
             value={opcion.valor}
             disabled={opcion.deshabilitada}
-            className="bg-[#111823] text-grafito"
+            className="bg-white text-grafito"
           >
             {opcion.etiqueta}
           </option>
@@ -52,7 +52,7 @@ export function SelectField({ etiqueta, opciones, ayuda, error, id, className = 
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-peligro">
           {error}
         </p>
       )}

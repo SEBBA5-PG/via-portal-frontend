@@ -17,58 +17,108 @@
   --font-heading: "Manrope", system-ui, sans-serif;
   --font-body: "Nunito", system-ui, sans-serif;
 
-  --color-cafe: #6c3a1f;
-  --color-cafe-muted: #b09867;
-  --color-institucional: #fde6b6;
-  --color-institucional-sidebar: #eacc90;
+  /* Card.tsx no tiene ningún consumidor real hoy (0 usos de <Card>) — se dejan sus tokens
+     sin tocar, sin costo, en vez de arrastrar una limpieza fuera de alcance. */
   --color-card-from: #fff9ed;
   --color-card-to: #fff2d7;
-  --color-acento: #f5a623;
-  --color-exito: #4a8d40;
-  --color-exito-bg: rgba(167, 191, 73, 0.34);
-  --color-info: #4fa8f0;
-  --color-alerta-from: #ffefed;
-  --color-alerta-to: #ffa984;
-
-  --radius-card: 24px;
   --radius-panel: 30px;
   --radius-pill: 999px;
 
   /*
-    Línea ejecutiva del login (2026-09-11). Paleta PROVISIONAL para el portal como CRM
-    independiente de la app: no es canon ni vive en Constantes del Sistema de VIA BRAIN.
-    Estructura y medidas tomadas del "CRM UI Kit for SaaS Dashboards" (Figma, nodo 9077:792).
-    El resto del portal (AppShell, Home) sigue con los tokens de arriba hasta su rediseño.
-
-    Repunteados a la paleta "glass" oscura (2026-09-12, prototipo de chat aprobado):
-    la tarjeta del acceso dejó de ser blanca sólida, así que grafito/texto-suave/primario
-    (que solo se usan dentro de pages/auth/ y sus componentes ui/ exclusivos — verificado,
-    ningún otro lugar del portal los referencia) pasan de oscuros-sobre-blanco a
-    claros-sobre-vidrio-oscuro. --color-borde/--color-fondo se quedan en sus valores claros
-    de siempre: los componentes los usan con modificador de opacidad (/6, /40) para el
-    efecto translúcido, en vez de cambiar el token base.
+    Reskin claro del portal (2026-09-13) — reemplaza la paleta marino/glass oscura que
+    Q-1250 (2026-09-12) había fijado como "identidad visual única del portal, para las 18
+    categorías". Decisión tomada al portar el diseño de la sesión del Artifact
+    (portal-light.html): el usuario fue advertido del conflicto directo con Q-1250 y
+    decidió explícitamente revertirla en vez de mantenerla — registrado en
+    memoria/hilos/portal-web-reskin-claro.md. Se mantienen los MISMOS NOMBRES de token
+    (fondo/grafito/texto-suave/borde/primario/ambar) para no tocar los 30+ archivos que ya
+    consumen bg-fondo/text-grafito/text-texto-suave/border-borde/bg-primario/bg-ambar —
+    solo cambian los valores. --color-marino e --color-info quedaban sin ningún consumidor
+    real (ninguna clase bg-marino/bg-info en el repo) y se retiran con este cambio.
   */
-  --color-marino: #14213d;
-  --color-primario: #78b4ff;
+  --color-fondo: #eef1f7;
+  --color-grafito: #1c2440;
+  --color-texto-suave: #69708a;
+  --color-texto-tenue: #9aa0b8;
+  --color-borde: #e4e7f0;
+  --color-primario: #3a49dc;
+  --color-primario-600: #2f3bc4;
+  --color-primario-tint: #e3e6fd;
   --color-ambar: #e0a526;
-  --color-grafito: #f3ede4;
-  --color-texto-suave: #a39a8d;
-  --color-borde: #e6e8ef;
-  --color-fondo: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #e8ecf4;
+  --color-exito: #1f9d55;
+  --color-peligro: #d5443a;
+
+  /* "Estado sólido" — el mismo relleno se reusa en el sidebar y en cualquier otro bloque
+     de énfasis sólido del reskin (categoría de permisos activa, tarjeta de rol
+     seleccionada, caja de alcance territorial, botones primarios). */
+  --side-bg: #002db2;
+  --side-texto: #aebbf2;
+  --side-texto-fuerte: #ffffff;
+  --side-hover: rgba(255, 255, 255, 0.1);
+  --side-activo-bg: #ffffff;
+  --side-activo-fg: #002db2;
 
   --radius-control: 10px;
+  --radius-card: 18px;
 
   /*
-    Fondo animado del flujo de acceso (Q-1251/Q-1252, 2026-09-12): la piel fija de todo
-    el login — casi negro puro, con el matiz azul mínimo suficiente para no leerse plano.
-    Vive aparte de --color-marino/--color-primario de arriba: esos siguen siendo la
-    identidad del resto del portal (Q-1250), este es un tratamiento propio del acceso.
+    Tokens exclusivos del flujo de acceso (pre-login, Q-1251/Q-1252). --color-fondo-acceso
+    es la piel fija del login — casi negro puro, con el matiz azul mínimo suficiente para
+    no leerse plano. --color-acceso-texto/--color-acceso-texto-suave se desacoplan aquí
+    (2026-09-13) de --color-grafito/--color-texto-suave: antes compartían nombre y valor
+    porque ambos eran claros-sobre-oscuro (Q-1250), pero con el reskin claro del portar de
+    arriba esos dos tokens ahora son oscuros — el login en modo oscuro necesita seguir
+    teniendo texto claro sobre su fondo oscuro, así que conservan aquí los valores viejos
+    de grafito/texto-suave bajo nombre propio.
   */
   --color-fondo-acceso: #03060a;
+  --color-acceso-texto: #f3ede4;
+  --color-acceso-texto-suave: #a39a8d;
+}
+
+/* Modo claro automático del login (2026-09-13, sin selector manual en la UI): bajo
+   `prefers-color-scheme: light` del sistema operativo, el acceso pasa a usar los mismos
+   tokens claros que el resto del portal en vez de su piel oscura fija — vidrio azulado,
+   no una tercera paleta. Sin preferencia declarada o con el sistema en oscuro, se queda
+   con los valores oscuros de arriba tal cual. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --color-fondo-acceso: var(--color-fondo);
+    --color-acceso-texto: var(--color-grafito);
+    --color-acceso-texto-suave: var(--color-texto-suave);
+  }
+}
+
+/*
+  Contraste de la tarjeta de acceso (2026-09-14): TextField/SelectField/CasillasDigitos y
+  demás controles del flujo de login son componentes GENÉRICOS del portal — usan los tokens
+  `text-grafito`/`text-texto-suave`/`border-borde`, pensados para el reskin claro del resto
+  de pantallas (oscuro-sobre-claro). Dentro de la tarjeta de acceso eso es justo al revés
+  (texto sobre vidrio oscuro por defecto), así que quedaban casi invisibles: la etiqueta, el
+  input y la ayuda del campo de cédula/PIN se veían en tinta oscura sobre fondo oscuro.
+  Se redefinen estos tres tokens SOLO dentro de `.bg-fondo-acceso` (la piel del login), con
+  valores fijos — no como alias de --color-acceso-texto/-suave, para no crear una referencia
+  circular con la regla de arriba (que sí depende de --color-grafito). Duplica los mismos
+  valores que ya usan --color-acceso-texto/-suave a propósito.
+*/
+.bg-fondo-acceso {
+  --color-grafito: #f3ede4;
+  --color-texto-suave: #a39a8d;
+  --color-borde: rgba(255, 255, 255, 0.16);
+}
+
+@media (prefers-color-scheme: light) {
+  .bg-fondo-acceso {
+    --color-grafito: #1c2440;
+    --color-texto-suave: #69708a;
+    --color-borde: #e4e7f0;
+  }
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
   font-family: var(--font-body);
 }
 
@@ -79,7 +129,7 @@
 body {
   margin: 0;
   background: var(--color-fondo-acceso);
-  color: var(--color-cafe);
+  color: var(--color-grafito);
 }
 
 /* La transición entre pasos del flujo de acceso (Q-1251) se maneja con `motion`

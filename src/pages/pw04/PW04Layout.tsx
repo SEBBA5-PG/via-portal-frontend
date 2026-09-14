@@ -10,11 +10,16 @@ export function PW04Layout({
   titulo,
   descripcion,
   acciones,
+  // La ficha de una cuenta no es una de las dos secciones de PW-04 (Cuentas administrativas
+  // / Doble Firma): es un nivel más abajo, así que ya no muestra ese menú — solo el botón
+  // "Volver al listado" que trae sus propias `acciones` (observación 2026-09-14).
+  mostrarSolapas = true,
   children,
 }: {
   titulo: string
   descripcion?: ReactNode
   acciones?: ReactNode
+  mostrarSolapas?: boolean
   children: ReactNode
 }) {
   const admin = useAdmin()
@@ -31,11 +36,10 @@ export function PW04Layout({
 
   return (
     <CategoriaLayout
-      categoria="PW-04 · Roles y permisos"
       titulo={titulo}
       descripcion={descripcion}
       acciones={acciones}
-      solapas={solapas}
+      solapas={mostrarSolapas ? solapas : undefined}
     >
       {children}
     </CategoriaLayout>

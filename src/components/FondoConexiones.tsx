@@ -16,6 +16,11 @@ const AZULES: Array<[number, number, number]> = [
 // descarga, tinte al acercarse) en el mismo blanco, para no meter más color
 // del necesario en la interfaz.
 const BLANCO_SENAL: [number, number, number] = [255, 255, 255]
+// Modo claro automático del acceso (2026-09-13): sobre el fondo claro del portal, blanco
+// puro sería invisible — la señal/pulso pasa a usar el mismo azul sólido del reskin
+// (--side-bg, #002db2) en su lugar. Los nodos y la línea gris quedan igual: ya son
+// azules/grises y funcionan sobre ambos fondos.
+const AZUL_SENAL_CLARO: [number, number, number] = [0, 45, 178]
 // Gris azulado apagado — se distingue del negro del fondo y de los azules
 // vivos de los nodos, sin competir con ninguno de los dos.
 const GRIS_LINEA: [number, number, number] = [98, 106, 120]
@@ -127,8 +132,23 @@ function arbolMinimo(nodos: Nodo[], indices: number[]): Array<[number, number]> 
 // nunca se regeneran, apagados por defecto y que se encienden al azar (destello
 // propio, no generación). AuthLayout la monta una sola vez a pantalla completa;
 // cédula, PIN, 2FA y recuperación la comparten como piel fija de fondo.
-export function FondoConexiones() {
+interface Props {
+  // Modo claro automático del acceso (2026-09-13): true cuando prefers-color-scheme del SO
+  // es 'light'. Solo cambia el color de la señal/pulso (ver AZUL_SENAL_CLARO arriba) — nodos
+  // y línea gris quedan iguales en ambos esquemas.
+  claro?: boolean
+}
+
+export function FondoConexiones({ claro = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Ref (no estado): la simulación de nodos vive en closures de este efecto y nunca se
+  // remonta mientras dura la sesión de acceso (ver comentario de la función). Si `claro`
+  // cambiara de prop en deps del efecto, reiniciaría todo el campo de nodos. Con un ref
+  // leído en cada frame, el color de la señal reacciona en vivo sin tocar la simulación.
+  const claroRef = useRef(claro)
+  useEffect(() => {
+    claroRef.current = claro
+  }, [claro])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -391,10 +411,13 @@ export function FondoConexiones() {
         }
       }
 
-      if (pulsoAmbiente) pulsoAmbiente = dibujarSenalLinea(pulsoAmbiente, BLANCO_SENAL, 0.0045, conexionesVivas, 0.55)
-      if (pulsoCursor) pulsoCursor = dibujarSenalLinea(pulsoCursor, BLANCO_SENAL, 0.022, conexionesVivas, 1)
+      // Sobre fondo claro el blanco de la señal sería invisible: se reemplaza por el azul
+      // sólido del reskin (AZUL_SENAL_CLARO). Nodos y línea gris no cambian.
+      const colorSenal = claroRef.current ? AZUL_SENAL_CLARO : BLANCO_SENAL
+      if (pulsoAmbiente) pulsoAmbiente = dibujarSenalLinea(pulsoAmbiente, colorSenal, 0.0045, conexionesVivas, 0.55)
+      if (pulsoCursor) pulsoCursor = dibujarSenalLinea(pulsoCursor, colorSenal, 0.022, conexionesVivas, 1)
       descargas = descargas
-        .map((d) => dibujarSenalLinea(d, BLANCO_SENAL, 0.05, conexionesVivas, 1.1))
+        .map((d) => dibujarSenalLinea(d, colorSenal, 0.05, conexionesVivas, 1.1))
         .filter((d): d is Pulso => d !== null)
 
       // la red respira sola de fondo, independiente del cursor

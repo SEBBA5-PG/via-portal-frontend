@@ -20,10 +20,10 @@ export function FiltroSelect({
         value={valor}
         disabled={deshabilitado}
         onChange={(e) => onCambiar(e.target.value)}
-        className="h-10 rounded-full border-[1.5px] border-borde/40 bg-fondo/[0.05] px-4 text-sm text-grafito outline-none transition focus:border-primario focus:ring-4 focus:ring-ambar/30 disabled:opacity-60"
+        className="h-10 rounded-full border border-borde bg-white px-4 text-sm text-grafito outline-none transition focus:border-primario focus:ring-4 focus:ring-ambar/30 disabled:opacity-60"
       >
         {opciones.map(([v, texto]) => (
-          <option key={v} value={v} className="bg-[#111823] text-grafito">
+          <option key={v} value={v} className="bg-white text-grafito">
             {texto}
           </option>
         ))}

@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { requiere2FA, type Rol } from '../data/roles'
 import { SEED_USERS, type DemoUser } from '../data/mockUsers'
+import { loginBackend, logoutBackend } from '../lib/authApi'
 import {
   borrarClave,
   borrarIdDeSesionDeEstaPestana,
@@ -155,7 +156,7 @@ interface AuthContextValue {
   dispositivoPendiente: { userId: string } | null
   motivoSalida: 'expirada' | 'otro-dispositivo' | null
   recuperacion: Recuperacion | null
-  login: (cedula: string, pin: string) => ResultadoLogin
+  login: (cedula: string, pin: string) => Promise<ResultadoLogin>
   confirmarEnrolamiento: () => void
   confirmarCodigo2FA: (codigo: string) => ResultadoCodigo
   reenviarCodigo2FA: () => ResultadoCodigo
@@ -296,15 +297,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true, codigo: generarCodigo(), expiraEn: ahora + DURACION_CODIGO_MS }
   }
 
+  // Tras el PIN correcto (ya sea contra las cuentas simuladas o contra conexion-api): S/A pasan
+  // al desafío OTP (que sigue 100% simulado, PW-01 — el corte de login real no toca esto); C
+  // entra directo, salvo el enrolamiento de dispositivo.
+  function continuarTrasPinCorrecto(user: DemoUser): ResultadoLogin {
+    if (requiere2FA(user.rol)) {
+      const emitido = emitirCodigo(user)
+      if (!emitido.ok) return { ok: false, tipo: 'codigo', mensaje: emitido.mensaje }
+      setDesafio2FA({ userId: user.id, codigo: emitido.codigo, expiraEn: emitido.expiraEn, fallos: 0 })
+      return { ok: true }
+    }
+
+    // Coordinador Territorial sin 2FA: si el dispositivo no es el enrolado, primero hay que
+    // enrolarlo (PW-01).
+    if (dispositivosEnrolados[user.id] !== idDeEsteDispositivo()) {
+      setDispositivoPendiente({ userId: user.id })
+      return { ok: true }
+    }
+
+    crearSesion(user.id)
+    return { ok: true }
+  }
+
   // PW-01: identificador propio del portal = cédula (no celular/email como la app), primer
-  // factor = PIN numérico. Tras el PIN correcto: S/A pasan al desafío OTP; C entra directo,
-  // salvo el enrolamiento de dispositivo.
-  function login(cedula: string, pin: string): ResultadoLogin {
+  // factor = PIN numérico.
+  //
+  // La cuenta puede venir de dos lados: las cuentas simuladas de siempre (SEED_USERS, con todo
+  // su bloqueo/antiabuso local) o, si la cédula no está entre esas, la "puerta de entrada" real
+  // contra conexion-api (Sanctum) — las 2 cuentas quemadas en la base de datos (VIA BRAIN,
+  // Portal Web — Cuentas de prueba del demo.md). El resto del flujo (2FA, sesión) es el mismo
+  // para ambas: solo cambia quién valida la cédula+PIN.
+  async function login(cedula: string, pin: string): Promise<ResultadoLogin> {
     const cc = cedula.trim()
     const user = usuarios.find((u) => u.cedula === cc)
+
     if (!user) {
-      return { ok: false, tipo: 'sin-cuenta', mensaje: 'No encontramos una cuenta con esa cédula.' }
+      const resultado = await loginBackend(cc, pin)
+      if (!resultado.ok) {
+        return { ok: false, tipo: 'sin-cuenta', mensaje: resultado.mensaje }
+      }
+      const cuenta = resultado.cuenta
+      const nuevo: DemoUser = {
+        id: cuenta.id,
+        nombre: cuenta.nombre,
+        cedula: cuenta.cedula,
+        rol: cuenta.rol,
+        email: cuenta.email,
+        telefonoWhatsapp: cuenta.telefonoWhatsapp,
+        pin,
+      }
+      setUsuarios((prev) => [...prev.filter((u) => u.id !== nuevo.id), nuevo])
+      return continuarTrasPinCorrecto(nuevo)
     }
+
     const bloqueo = bloqueos[user.id]
     if (bloqueo?.duro) {
       return { ok: false, tipo: 'bloqueado-duro' }
@@ -342,23 +387,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setBloqueos((prev) => ({ ...prev, [user.id]: { intentos: 0, bloqueadoHasta: null, huboBloqueoPrevio: false, duro: false } }))
 
-    // Superadministrador/Administrador: un único desafío OTP, nunca dos (PW-01).
-    if (requiere2FA(user.rol)) {
-      const emitido = emitirCodigo(user)
-      if (!emitido.ok) return { ok: false, tipo: 'codigo', mensaje: emitido.mensaje }
-      setDesafio2FA({ userId: user.id, codigo: emitido.codigo, expiraEn: emitido.expiraEn, fallos: 0 })
-      return { ok: true }
-    }
-
-    // Coordinador Territorial sin 2FA: si el dispositivo no es el enrolado, primero hay que
-    // enrolarlo (PW-01).
-    if (dispositivosEnrolados[user.id] !== idDeEsteDispositivo()) {
-      setDispositivoPendiente({ userId: user.id })
-      return { ok: true }
-    }
-
-    crearSesion(user.id)
-    return { ok: true }
+    return continuarTrasPinCorrecto(user)
   }
 
   function confirmarEnrolamiento() {
@@ -409,6 +438,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     borrarIdDeSesionDeEstaPestana()
     setSesion(null)
     setMotivoSalida(null)
+    // Fire-and-forget: si la cuenta activa era una de las 2 reales, cierra también la sesión
+    // de Sanctum. Si era una cuenta simulada, el backend simplemente no tiene nada que cerrar.
+    void logoutBackend()
   }
 
   function limpiarMotivoSalida() {

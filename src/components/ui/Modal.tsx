@@ -41,12 +41,12 @@ export function Modal({ abierto, titulo, descripcion, children, onCerrar, accion
         // Clic en el backdrop (el propio <dialog>, fuera del panel interior) cierra.
         if (e.target === ref.current) onCerrar()
       }}
-      className={`m-auto w-[calc(100vw-2rem)] bg-transparent p-0 backdrop:bg-black/70 backdrop:backdrop-blur-sm ${
+      className={`m-auto w-[calc(100vw-2rem)] bg-transparent p-0 backdrop:bg-black/40 backdrop:backdrop-blur-sm ${
         ancho === 'amplio' ? 'max-w-3xl' : 'max-w-lg'
       }`}
     >
       {abierto && (
-        <div className="rounded-[24px] border border-white/10 bg-gradient-to-b from-[#1b2432] to-[#0d131c] p-7 shadow-[0_40px_90px_rgba(0,0,0,0.65)]">
+        <div className="rounded-[18px] border border-borde bg-white p-7 shadow-[0_1px_2px_rgba(28,36,64,0.04),0_12px_32px_rgba(28,36,64,0.08)]">
           <h2 className="font-heading text-xl font-extrabold tracking-tight text-grafito">{titulo}</h2>
           {descripcion && (
             <div className="mt-2 text-sm leading-relaxed text-texto-suave">{descripcion}</div>

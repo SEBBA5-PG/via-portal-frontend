@@ -192,7 +192,7 @@ export function FichaUsuarioPage() {
             className={`rounded-full border px-4 py-2 font-heading text-sm font-bold transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ambar/40 ${
               pestana === p
                 ? 'border-primario/40 bg-primario/[0.14] text-primario'
-                : 'border-white/10 bg-white/[0.03] text-texto-suave hover:text-grafito'
+                : 'border-borde bg-surface-sunken text-texto-suave hover:text-grafito'
             }`}
           >
             {p === 'perfil' ? 'Perfil' : p === 'juego' ? 'Juego y Ágatas' : 'Historial'}
@@ -263,7 +263,7 @@ export function FichaUsuarioPage() {
             ) : (
               <ul>
                 {ajustes.map((a) => (
-                  <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] px-6 py-4 last:border-0">
+                  <li key={a.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-borde px-6 py-4 last:border-0">
                     <div>
                       <p className="font-heading text-sm font-extrabold text-grafito">
                         {a.delta > 0 ? '+' : ''}
@@ -311,7 +311,7 @@ export function FichaUsuarioPage() {
               <CabeceraSuperficie titulo="Historial administrativo" descripcion="Registro inmutable en audit_logs." />
               <ul>
                 {historial.map((e) => (
-                  <li key={e.id} className="border-b border-white/[0.04] px-6 py-4 last:border-0">
+                  <li key={e.id} className="border-b border-borde px-6 py-4 last:border-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tono={e.severidad === 'alta' ? 'peligro' : e.conDobleFirma ? 'alerta' : 'neutro'}>
                         {ETIQUETA_EVENTO[e.tipo]}
@@ -457,8 +457,8 @@ export function FichaUsuarioPage() {
         }
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Lista titulo="Se borra" items={IMPACTO_ELIMINACION.seBorra} tono="text-red-300" />
-          <Lista titulo="Se conserva" items={IMPACTO_ELIMINACION.seConserva} tono="text-[#8fd382]" />
+          <Lista titulo="Se borra" items={IMPACTO_ELIMINACION.seBorra} tono="text-peligro" />
+          <Lista titulo="Se conserva" items={IMPACTO_ELIMINACION.seConserva} tono="text-exito" />
         </div>
         <Lista titulo="Además" items={IMPACTO_ELIMINACION.efectos} tono="text-ambar" />
         <div className="mt-4 flex flex-col gap-3">
@@ -513,7 +513,7 @@ export function FichaUsuarioPage() {
               />
             ))}
             {primaria && otraDeFusion && (
-              <p className="rounded-[14px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-grafito/85">
+              <p className="rounded-[14px] border border-borde bg-surface-sunken px-4 py-3 text-sm text-grafito/85">
                 {primaria.alias} recibe {otraDeFusion.agatas.toLocaleString('es-CO')} Ágatas y la red de {otraDeFusion.alias}.{' '}
                 {otraDeFusion.alias} queda eliminada con la nota fusionada_con_{primaria.id}.
               </p>
@@ -565,7 +565,7 @@ function Aviso({ tono, children }: { tono: 'alerta' | 'peligro'; children: React
     <div
       role="status"
       className={`rounded-[16px] border px-5 py-3.5 text-sm leading-relaxed ${
-        tono === 'peligro' ? 'border-red-400/25 bg-red-500/10 text-red-200' : 'border-ambar/25 bg-ambar/[0.07] text-ambar'
+        tono === 'peligro' ? 'border-peligro/25 bg-peligro/[0.07] text-peligro' : 'border-ambar/25 bg-ambar/[0.07] text-ambar'
       }`}
     >
       {children}

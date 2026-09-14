@@ -6,6 +6,10 @@
   la cuenta hereda automáticamente todo lo que cuelga debajo. Y el territorio va POR
   CUENTA, no por permiso individual.
 
+  Alcance real del demo (2026-09-14): el operativo es exclusivamente en el Huila, así que
+  el nodo raíz es el departamento (no Colombia) y el siguiente nivel son sus 4 subregiones
+  — no los 37 municipios sueltos. Cada subregión cuelga sus municipios principales.
+
   Pendiente de la bóveda (`[DECISIÓN BORRADOR]`): el `municipio` de los usuarios de la app
   hoy vive como texto libre y debe migrar a referenciar esta misma tabla compartida.
 */
@@ -19,28 +23,55 @@ export interface Territorio {
   padreId: string | null
 }
 
-export const TERRITORIO_RAIZ = 't-co'
+export const TERRITORIO_RAIZ = 't-huila'
 
 export const TERRITORIOS: Territorio[] = [
-  { id: 't-co', nombre: 'Colombia', tipo: 'pais', padreId: null },
+  { id: 't-huila', nombre: 'Huila', tipo: 'departamento', padreId: null },
 
-  { id: 't-cund', nombre: 'Cundinamarca', tipo: 'departamento', padreId: 't-co' },
-  { id: 't-bogota', nombre: 'Bogotá D.C.', tipo: 'municipio', padreId: 't-cund' },
-  { id: 't-soacha', nombre: 'Soacha', tipo: 'municipio', padreId: 't-cund' },
-  { id: 't-zipaquira', nombre: 'Zipaquirá', tipo: 'municipio', padreId: 't-cund' },
+  { id: 't-norte', nombre: 'Subregión Norte', tipo: 'region', padreId: 't-huila' },
+  { id: 't-neiva', nombre: 'Neiva', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-aipe', nombre: 'Aipe', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-algeciras', nombre: 'Algeciras', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-baraya', nombre: 'Baraya', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-campoalegre', nombre: 'Campoalegre', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-colombia-huila', nombre: 'Colombia', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-hobo', nombre: 'Hobo', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-iquira', nombre: 'Íquira', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-palermo', nombre: 'Palermo', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-rivera', nombre: 'Rivera', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-santamaria', nombre: 'Santa María', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-tello', nombre: 'Tello', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-teruel', nombre: 'Teruel', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-villavieja', nombre: 'Villavieja', tipo: 'municipio', padreId: 't-norte' },
+  { id: 't-yaguara', nombre: 'Yaguará', tipo: 'municipio', padreId: 't-norte' },
 
-  { id: 't-ant', nombre: 'Antioquia', tipo: 'departamento', padreId: 't-co' },
-  { id: 't-medellin', nombre: 'Medellín', tipo: 'municipio', padreId: 't-ant' },
-  { id: 't-bello', nombre: 'Bello', tipo: 'municipio', padreId: 't-ant' },
-  { id: 't-envigado', nombre: 'Envigado', tipo: 'municipio', padreId: 't-ant' },
+  { id: 't-centro', nombre: 'Subregión Centro', tipo: 'region', padreId: 't-huila' },
+  { id: 't-garzon', nombre: 'Garzón', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-altamira', nombre: 'Altamira', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-elagrado', nombre: 'El Agrado', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-gigante', nombre: 'Gigante', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-guadalupe', nombre: 'Guadalupe', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-pital', nombre: 'Pital', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-suaza', nombre: 'Suaza', tipo: 'municipio', padreId: 't-centro' },
+  { id: 't-tarqui', nombre: 'Tarqui', tipo: 'municipio', padreId: 't-centro' },
 
-  { id: 't-atl', nombre: 'Atlántico', tipo: 'departamento', padreId: 't-co' },
-  { id: 't-barranquilla', nombre: 'Barranquilla', tipo: 'municipio', padreId: 't-atl' },
-  { id: 't-soledad', nombre: 'Soledad', tipo: 'municipio', padreId: 't-atl' },
+  { id: 't-sur', nombre: 'Subregión Sur', tipo: 'region', padreId: 't-huila' },
+  { id: 't-pitalito', nombre: 'Pitalito', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-acevedo', nombre: 'Acevedo', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-elias', nombre: 'Elías', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-isnos', nombre: 'Isnos', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-oporapa', nombre: 'Oporapa', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-palestina', nombre: 'Palestina', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-saladoblanco', nombre: 'Saladoblanco', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-sanagustin', nombre: 'San Agustín', tipo: 'municipio', padreId: 't-sur' },
+  { id: 't-timana', nombre: 'Timaná', tipo: 'municipio', padreId: 't-sur' },
 
-  { id: 't-valle', nombre: 'Valle del Cauca', tipo: 'departamento', padreId: 't-co' },
-  { id: 't-cali', nombre: 'Cali', tipo: 'municipio', padreId: 't-valle' },
-  { id: 't-palmira', nombre: 'Palmira', tipo: 'municipio', padreId: 't-valle' },
+  { id: 't-occidente', nombre: 'Subregión Occidente', tipo: 'region', padreId: 't-huila' },
+  { id: 't-laplata', nombre: 'La Plata', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-laargentina', nombre: 'La Argentina', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-nataga', nombre: 'Nátaga', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-paicol', nombre: 'Paicol', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-tesalia', nombre: 'Tesalia', tipo: 'municipio', padreId: 't-occidente' },
 ]
 
 const POR_ID = new Map(TERRITORIOS.map((t) => [t.id, t]))
@@ -57,14 +88,14 @@ export function hijosDe(padreId: string | null): Territorio[] {
 // "global" — no hay un booleano que lo diga.
 export function describirAlcance(territorioIds: string[]): string {
   if (territorioIds.length === 0) return 'Sin alcance asignado'
-  if (territorioIds.includes(TERRITORIO_RAIZ)) return 'Global (todo el país)'
+  if (territorioIds.includes(TERRITORIO_RAIZ)) return 'Global (todo el Huila)'
   const nombres = territorioIds.map((id) => territorioPorId(id)?.nombre ?? id)
   if (nombres.length <= 2) return nombres.join(' · ')
   return `${nombres.slice(0, 2).join(' · ')} +${nombres.length - 2}`
 }
 
 // Todos los territorios que una cuenta alcanza, expandiendo la herencia hacia abajo:
-// quien tiene Antioquia alcanza Medellín, Bello y Envigado sin tenerlos listados.
+// quien tiene una subregión alcanza sus municipios sin tenerlos listados.
 export function territoriosAlcanzados(territorioIds: string[]): Set<string> {
   const alcanzados = new Set<string>()
   const pendientes = [...territorioIds]

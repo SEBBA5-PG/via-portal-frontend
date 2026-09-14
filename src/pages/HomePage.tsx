@@ -129,9 +129,9 @@ export function HomePage() {
             <Link
               key={kpi.clave}
               to={kpi.destino}
-              className="rounded-[24px] outline-none focus-visible:ring-4 focus-visible:ring-ambar/40"
+              className="rounded-[18px] outline-none focus-visible:ring-4 focus-visible:ring-ambar/40"
             >
-              <Superficie className="h-full px-6 py-5 transition-colors hover:border-white/20">
+              <Superficie className="h-full px-6 py-5 transition-colors hover:bg-surface-sunken">
                 <p className="text-xs font-bold uppercase tracking-wide text-texto-suave">
                   {kpi.etiqueta}
                 </p>

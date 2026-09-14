@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { Rol } from '../data/roles'
-import { CUENTAS_SEED, type CuentaAdmin, type EstadoCuenta } from '../data/cuentas'
+import type { CuentaAdmin, EstadoCuenta } from '../data/cuentas'
 import { SOLICITUDES_SEED, type SolicitudPermiso } from '../data/solicitudes'
 import {
   AUDITORIA_SEED,
@@ -9,7 +9,9 @@ import {
   type TipoEvento,
 } from '../data/auditoria'
 import { permisosEfectivos, separarCambios, type CambioPropuesto } from '../dominio/permisos'
+import { crearCuentaBackend, editarCuentaBackend, listarCuentasBackend } from '../lib/cuentasApi'
 import { escribirJSON, leerJSON } from './storage'
+import { useAuth } from './authStore'
 
 /*
   Estado de PW-04 (cuentas administrativas, solicitudes de Doble Firma y auditoría).
@@ -25,7 +27,6 @@ import { escribirJSON, leerJSON } from './storage'
 
 const IP_DEMO = '190.24.10.55'
 
-const CLAVE_CUENTAS = 'pw04:cuentas'
 const CLAVE_SOLICITUDES = 'pw04:solicitudes'
 const CLAVE_AUDITORIA = 'pw04:auditoria'
 
@@ -45,16 +46,19 @@ export interface ResultadoEdicion {
 
 interface AdminContextValue {
   cuentas: CuentaAdmin[]
+  // true mientras la carga inicial de /api/cuentas está en vuelo. CuentasPage lo usa para no
+  // mostrar "0 cuentas" como si fuera un resultado real mientras el backend responde.
+  cargandoCuentas: boolean
   solicitudes: SolicitudPermiso[]
   auditoria: EntradaAuditoria[]
   cuentaPorId: (id: string) => CuentaAdmin | undefined
   auditoriaDe: (cuentaId: string) => EntradaAuditoria[]
-  crearCuenta: (actorId: string, datos: DatosNuevaCuenta, overrides: Record<string, boolean>) => { cuenta: CuentaAdmin; pinTemporal: string; resultado: ResultadoEdicion }
-  editarPermisos: (actorId: string, cuentaId: string, cambios: CambioPropuesto[], motivo: string) => ResultadoEdicion
-  editarIdentidad: (actorId: string, cuentaId: string, datos: Partial<Pick<CuentaAdmin, 'nombre' | 'email' | 'telefonoWhatsapp' | 'territorioIds'>>) => void
-  cambiarRol: (actorId: string, cuentaId: string, rol: Rol, motivo: string) => void
-  cambiarEstado: (actorId: string, cuentaId: string, estado: EstadoCuenta, motivo: string) => void
-  resolverSolicitud: (actorId: string, solicitudId: string, aprobar: boolean, motivoRechazo?: string) => void
+  crearCuenta: (actorId: string, datos: DatosNuevaCuenta, overrides: Record<string, boolean>) => Promise<{ cuenta: CuentaAdmin; pinTemporal: string; resultado: ResultadoEdicion }>
+  editarPermisos: (actorId: string, cuentaId: string, cambios: CambioPropuesto[], motivo: string) => Promise<ResultadoEdicion>
+  editarIdentidad: (actorId: string, cuentaId: string, datos: Partial<Pick<CuentaAdmin, 'nombre' | 'email' | 'telefonoWhatsapp' | 'territorioIds'>>) => Promise<void>
+  cambiarRol: (actorId: string, cuentaId: string, rol: Rol, motivo: string) => Promise<void>
+  cambiarEstado: (actorId: string, cuentaId: string, estado: EstadoCuenta, motivo: string) => Promise<void>
+  resolverSolicitud: (actorId: string, solicitudId: string, aprobar: boolean, motivoRechazo?: string) => Promise<void>
   reiniciarDemo: () => void
   // Punto único de escritura en audit_logs para las demás categorías (PW-03, PW-05): el
   // registro es uno solo, no uno por categoría.
@@ -63,24 +67,20 @@ interface AdminContextValue {
 
 const AdminContext = createContext<AdminContextValue | null>(null)
 
-// PW-04: "el sistema genera un PIN temporal de un solo uso; el nuevo usuario debe cambiarlo
-// en su primer login. Quien crea la cuenta nunca conoce el PIN permanente de otro."
-function generarPinTemporal(): string {
-  const digitos = new Uint8Array(6)
-  crypto.getRandomValues(digitos)
-  return Array.from(digitos, (d) => (d % 10).toString()).join('')
-}
-
+// El PIN temporal ya no lo genera el frontend: PW-04 dice que "el sistema" lo genera, y con
+// backend real ese sistema es conexion-api — POST /api/cuentas ya lo devuelve.
 function nuevoId(prefijo: string): string {
   return `${prefijo}-${crypto.randomUUID().slice(0, 8)}`
 }
 
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 export function AdminProvider({ children }: { children: ReactNode }) {
-  const [cuentas, setCuentas] = useState<CuentaAdmin[]>(() => leerJSON(CLAVE_CUENTAS, CUENTAS_SEED))
+  // Las cuentas ya no se siembran de un mock local: nacen vacías y se pueblan desde
+  // conexion-api (ver el useEffect de abajo). `solicitudes` y `auditoria` siguen 100% en
+  // localStorage — la bandeja de Doble Firma real es trabajo pendiente en el backend hermano.
+  const auth = useAuth()
+  const usuarioId = auth.usuarioActual?.id ?? null
+  const [cuentas, setCuentas] = useState<CuentaAdmin[]>([])
+  const [cargandoCuentas, setCargandoCuentas] = useState(true)
   const [solicitudes, setSolicitudes] = useState<SolicitudPermiso[]>(() =>
     leerJSON(CLAVE_SOLICITUDES, SOLICITUDES_SEED),
   )
@@ -88,9 +88,35 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     leerJSON(CLAVE_AUDITORIA, AUDITORIA_SEED),
   )
 
+  useEffect(() => {
+    // Sin sesión (aún no hizo login, o acaba de cerrar sesión) no hay cookie de Sanctum con
+    // la que pedir /api/cuentas — esperar a que authStore resuelva un usuarioActual antes de
+    // llamar al backend. Re-dispara en cada cambio de sesión (login, logout, cambio de
+    // usuario en dos pestañas) para no quedarse con la respuesta 401 del primer montaje.
+    if (usuarioId === null) {
+      setCuentas([])
+      setCargandoCuentas(false)
+      return
+    }
+    let cancelado = false
+    setCargandoCuentas(true)
+    listarCuentasBackend()
+      .then((recibidas) => {
+        if (!cancelado) setCuentas(recibidas)
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoCuentas(false)
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [usuarioId])
+
+  // Ya no hay un `guardarCuentas` que persista en localStorage: cada mutación de cuentas pasa
+  // por conexion-api (crearCuentaBackend/editarCuentaBackend) y esta función solo refleja la
+  // respuesta del servidor en el estado local.
   const guardarCuentas = useCallback((siguiente: CuentaAdmin[]) => {
     setCuentas(siguiente)
-    escribirJSON(CLAVE_CUENTAS, siguiente)
   }, [])
 
   const guardarSolicitudes = useCallback((siguiente: SolicitudPermiso[]) => {
@@ -128,9 +154,15 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     Aplica una tanda de cambios de permisos sobre una cuenta. Q-1255: las reducciones se
     escriben al instante en `overrides`, las ampliaciones no tocan la cuenta — se convierten
     en filas de `solicitudes_de_permiso` y la cuenta sigue con su valor anterior vigente.
+
+    Los inmediatos ahora se persisten contra conexion-api (PATCH /api/cuentas/:id). Las
+    ampliaciones que requieren Doble Firma siguen encoladas en `solicitudes`, que NO CAMBIA:
+    sigue en localStorage exactamente igual que hoy.
+    // Pendiente: Doble Firma real en conexion-api — por ahora la bandeja de aprobación sigue
+    // simulada aquí.
   */
   const editarPermisos = useCallback(
-    (actorId: string, cuentaId: string, cambios: CambioPropuesto[], motivo: string): ResultadoEdicion => {
+    async (actorId: string, cuentaId: string, cambios: CambioPropuesto[], motivo: string): Promise<ResultadoEdicion> => {
       const cuenta = cuentas.find((c) => c.id === cuentaId)
       if (!cuenta) return { aplicados: [], enviadosAFirma: [] }
 
@@ -140,11 +172,14 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       if (inmediatos.length > 0) {
         const overrides = { ...cuenta.overrides }
         for (const cambio of inmediatos) overrides[cambio.clave] = cambio.valorNuevo
-        guardarCuentas(
-          cuentas.map((c) =>
-            c.id === cuentaId ? { ...c, overrides, fechaEdicion: hoyISO() } : c,
-          ),
-        )
+        try {
+          const actualizada = await editarCuentaBackend(cuentaId, { overrides })
+          guardarCuentas(cuentas.map((c) => (c.id === cuentaId ? actualizada : c)))
+        } catch {
+          // Sin backend disponible, no hay nada más que este cliente pueda hacer: la
+          // mutación simplemente no queda persistida y el estado local no cambia.
+          return { aplicados: [], enviadosAFirma: [] }
+        }
       }
 
       if (requierenFirma.length > 0) {
@@ -191,24 +226,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   )
 
   const crearCuenta = useCallback(
-    (actorId: string, datos: DatosNuevaCuenta, overridesPropuestos: Record<string, boolean>) => {
-      const pinTemporal = generarPinTemporal()
-      const cuenta: CuentaAdmin = {
-        id: nuevoId('c'),
-        nombre: datos.nombre,
-        cedula: datos.cedula,
-        email: datos.email,
-        telefonoWhatsapp: datos.telefonoWhatsapp,
-        rol: datos.rol,
-        estado: 'provisional',
-        territorioIds: datos.territorioIds,
-        overrides: {},
-        fechaCreacion: hoyISO(),
-        fechaEdicion: hoyISO(),
-        creadoPor: actorId,
-        ultimoAcceso: null,
-      }
-
+    async (actorId: string, datos: DatosNuevaCuenta, overridesPropuestos: Record<string, boolean>) => {
       /*
         PW-04: "Al elegir el rol, el editor se precarga con la plantilla default de ese rol —
         si quien crea la cuenta no toca nada más, guarda así, sin fricción adicional
@@ -218,15 +236,43 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         o existente; reutilizar la pantalla no relaja ni endurece la regla."
 
         Con el matiz de Q-1255 encima: de esas personalizaciones, solo las ampliaciones
-        esperan firma. Las reducciones entran con la cuenta.
+        esperan firma. Las reducciones entran con la cuenta, y son las únicas que viajan en
+        `overrides` al backend — las ampliaciones no tocan la cuenta hasta que se aprueben.
       */
+      const borrador: CuentaAdmin = {
+        id: 'nueva',
+        nombre: datos.nombre,
+        cedula: datos.cedula,
+        email: datos.email,
+        telefonoWhatsapp: datos.telefonoWhatsapp,
+        rol: datos.rol,
+        estado: 'provisional',
+        territorioIds: datos.territorioIds,
+        overrides: {},
+        fechaCreacion: '',
+        fechaEdicion: '',
+        creadoPor: actorId,
+        ultimoAcceso: null,
+      }
+
       const cambios: CambioPropuesto[] = Object.entries(overridesPropuestos).map(([clave, valorNuevo]) => ({
         clave,
         valorNuevo,
       }))
-      const { inmediatos, requierenFirma } = separarCambios(cuenta, cambios)
-      const efectivosBase = permisosEfectivos(cuenta)
-      for (const cambio of inmediatos) cuenta.overrides[cambio.clave] = cambio.valorNuevo
+      const { inmediatos, requierenFirma } = separarCambios(borrador, cambios)
+      const efectivosBase = permisosEfectivos(borrador)
+      const overridesInmediatos: Record<string, boolean> = {}
+      for (const cambio of inmediatos) overridesInmediatos[cambio.clave] = cambio.valorNuevo
+
+      const { cuenta, pinTemporal } = await crearCuentaBackend({
+        nombre: datos.nombre,
+        cedula: datos.cedula,
+        email: datos.email,
+        telefonoWhatsapp: datos.telefonoWhatsapp,
+        rol: datos.rol,
+        territorioIds: datos.territorioIds,
+        overrides: overridesInmediatos,
+      })
 
       guardarCuentas([...cuentas, cuenta])
 
@@ -281,16 +327,19 @@ export function AdminProvider({ children }: { children: ReactNode }) {
   )
 
   const editarIdentidad = useCallback(
-    (_actorId: string, cuentaId: string, datos: Partial<CuentaAdmin>) => {
-      guardarCuentas(
-        cuentas.map((c) => (c.id === cuentaId ? { ...c, ...datos, fechaEdicion: hoyISO() } : c)),
-      )
+    async (_actorId: string, cuentaId: string, datos: Partial<CuentaAdmin>) => {
+      try {
+        const actualizada = await editarCuentaBackend(cuentaId, datos)
+        guardarCuentas(cuentas.map((c) => (c.id === cuentaId ? actualizada : c)))
+      } catch {
+        // Sin backend disponible, la edición no queda persistida — el estado local no cambia.
+      }
     },
     [cuentas, guardarCuentas],
   )
 
   const cambiarRol = useCallback(
-    (actorId: string, cuentaId: string, rol: Rol, motivo: string) => {
+    async (actorId: string, cuentaId: string, rol: Rol, motivo: string) => {
       const cuenta = cuentas.find((c) => c.id === cuentaId)
       if (!cuenta || cuenta.rol === rol) return
       /*
@@ -299,38 +348,42 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         cosa. Es una lectura de M02 Q-0050 de este demo, no una decisión de la bóveda —
         PW-04 no dice qué pasa con los overrides en un ascenso.
       */
-      guardarCuentas(
-        cuentas.map((c) =>
-          c.id === cuentaId ? { ...c, rol, overrides: {}, fechaEdicion: hoyISO() } : c,
-        ),
-      )
-      registrar([
-        { tipo: 'cambio_rol', actorId, cuentaAfectadaId: cuentaId, motivo, conDobleFirma: false },
-      ])
+      try {
+        const actualizada = await editarCuentaBackend(cuentaId, { rol, overrides: {} })
+        guardarCuentas(cuentas.map((c) => (c.id === cuentaId ? actualizada : c)))
+        registrar([
+          { tipo: 'cambio_rol', actorId, cuentaAfectadaId: cuentaId, motivo, conDobleFirma: false },
+        ])
+      } catch {
+        // Sin backend disponible, el cambio de rol no queda persistido.
+      }
     },
     [cuentas, guardarCuentas, registrar],
   )
 
   const cambiarEstado = useCallback(
-    (actorId: string, cuentaId: string, estado: EstadoCuenta, motivo: string) => {
-      guardarCuentas(
-        cuentas.map((c) => (c.id === cuentaId ? { ...c, estado, fechaEdicion: hoyISO() } : c)),
-      )
-      registrar([
-        {
-          tipo: estado === 'inactiva' ? 'cuenta_desactivada' : 'cambio_rol',
-          actorId,
-          cuentaAfectadaId: cuentaId,
-          motivo,
-          conDobleFirma: false,
-        },
-      ])
+    async (actorId: string, cuentaId: string, estado: EstadoCuenta, motivo: string) => {
+      try {
+        const actualizada = await editarCuentaBackend(cuentaId, { estado })
+        guardarCuentas(cuentas.map((c) => (c.id === cuentaId ? actualizada : c)))
+        registrar([
+          {
+            tipo: estado === 'inactiva' ? 'cuenta_desactivada' : 'cambio_rol',
+            actorId,
+            cuentaAfectadaId: cuentaId,
+            motivo,
+            conDobleFirma: false,
+          },
+        ])
+      } catch {
+        // Sin backend disponible, el cambio de estado no queda persistido.
+      }
     },
     [cuentas, guardarCuentas, registrar],
   )
 
   const resolverSolicitud = useCallback(
-    (actorId: string, solicitudId: string, aprobar: boolean, motivoRechazo?: string) => {
+    async (actorId: string, solicitudId: string, aprobar: boolean, motivoRechazo?: string) => {
       const solicitud = solicitudes.find((s) => s.id === solicitudId)
       if (!solicitud || solicitud.estado !== 'pendiente') return
 
@@ -348,18 +401,20 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         ),
       )
 
+      // Pendiente: Doble Firma real en conexion-api — por ahora la bandeja de aprobación
+      // sigue simulada aquí; al aprobar, sí se persiste el override resultante en la cuenta.
       if (aprobar) {
-        guardarCuentas(
-          cuentas.map((c) =>
-            c.id === solicitud.cuentaObjetivoId
-              ? {
-                  ...c,
-                  overrides: { ...c.overrides, [solicitud.permisoClave]: solicitud.valorNuevo },
-                  fechaEdicion: hoyISO(),
-                }
-              : c,
-          ),
-        )
+        const cuenta = cuentas.find((c) => c.id === solicitud.cuentaObjetivoId)
+        if (cuenta) {
+          try {
+            const actualizada = await editarCuentaBackend(cuenta.id, {
+              overrides: { ...cuenta.overrides, [solicitud.permisoClave]: solicitud.valorNuevo },
+            })
+            guardarCuentas(cuentas.map((c) => (c.id === cuenta.id ? actualizada : c)))
+          } catch {
+            // Sin backend disponible, la aprobación no queda persistida en la cuenta.
+          }
+        }
       }
 
       registrar([
@@ -384,16 +439,22 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     [cuentas, solicitudes, guardarCuentas, guardarSolicitudes, registrar],
   )
 
+  /*
+    Las cuentas ya no son un seed local: reiniciar el demo no tiene forma de "restaurarlas"
+    sin backend, así que este botón queda limitado a lo que sí sigue siendo local —
+    solicitudes y auditoría. Cuentas se recargarían con un refresh de página (vuelve a
+    disparar el useEffect de listarCuentasBackend).
+  */
   const reiniciarDemo = useCallback(() => {
-    guardarCuentas(CUENTAS_SEED)
     guardarSolicitudes(SOLICITUDES_SEED)
     setAuditoria(AUDITORIA_SEED)
     escribirJSON(CLAVE_AUDITORIA, AUDITORIA_SEED)
-  }, [guardarCuentas, guardarSolicitudes])
+  }, [guardarSolicitudes])
 
   const valor = useMemo<AdminContextValue>(
     () => ({
       cuentas,
+      cargandoCuentas,
       solicitudes,
       auditoria,
       cuentaPorId,
@@ -409,6 +470,7 @@ export function AdminProvider({ children }: { children: ReactNode }) {
     }),
     [
       cuentas,
+      cargandoCuentas,
       solicitudes,
       auditoria,
       cuentaPorId,

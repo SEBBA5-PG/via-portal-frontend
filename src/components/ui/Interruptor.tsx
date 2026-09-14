@@ -31,7 +31,7 @@ export function Interruptor({
 }) {
   const id = useId()
   return (
-    <div className="flex items-start gap-4 px-6 py-3.5 transition-colors hover:bg-white/[0.02]">
+    <div className="flex items-start gap-4 px-6 py-3.5 transition-colors hover:bg-surface-sunken">
       <button
         type="button"
         role="switch"
@@ -40,7 +40,7 @@ export function Interruptor({
         disabled={bloqueado}
         onClick={() => onCambiar(!activo)}
         className={`mt-0.5 h-6 w-11 shrink-0 rounded-full border transition-colors outline-none focus-visible:ring-4 focus-visible:ring-ambar/40 disabled:cursor-not-allowed disabled:opacity-45 ${
-          activo ? 'border-primario/50 bg-primario/35' : 'border-white/15 bg-white/[0.06]'
+          activo ? 'border-primario bg-primario' : 'border-borde bg-surface-sunken'
         }`}
       >
         <span

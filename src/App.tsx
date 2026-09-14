@@ -2,6 +2,7 @@ import { AnimatePresence } from 'motion/react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AuthProvider } from './state/authStore'
 import { AdminProvider } from './state/adminStore'
+import { NavegacionGuardiaProvider } from './state/navegacionGuardiaStore'
 import { ProtectedRoute } from './routes/ProtectedRoute'
 import { RutaCategoria } from './routes/RutaCategoria'
 import { TransicionPagina } from './components/TransicionPagina'
@@ -158,14 +159,16 @@ function RutasAnimadas() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AdminProvider>
-        <OperacionProvider>
-          <BrowserRouter>
-            <RutasAnimadas />
-          </BrowserRouter>
-        </OperacionProvider>
-      </AdminProvider>
-    </AuthProvider>
+    <NavegacionGuardiaProvider>
+      <AuthProvider>
+        <AdminProvider>
+          <OperacionProvider>
+            <BrowserRouter>
+              <RutasAnimadas />
+            </BrowserRouter>
+          </OperacionProvider>
+        </AdminProvider>
+      </AuthProvider>
+    </NavegacionGuardiaProvider>
   )
 }

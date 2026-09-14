@@ -50,10 +50,10 @@ export function LoginPage() {
     setError(mensaje)
   }
 
-  function ingresar(valor: string) {
+  async function ingresar(valor: string) {
     if (valor.length !== LONGITUD_PIN) return
     setError(null)
-    const resultado = auth.login(cedula, valor)
+    const resultado = await auth.login(cedula, valor)
     // También en el éxito: si la persona vuelve desde el desafío OTP, las casillas quedan vacías.
     setPin('')
     if (resultado.ok) return

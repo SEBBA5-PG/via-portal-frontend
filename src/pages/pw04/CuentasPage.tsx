@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PW04Layout } from './PW04Layout'
 import { Badge, type TonoBadge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { BotonCircularExpansible } from '../../components/ui/BotonCircularExpansible'
 import { EstadoVacio } from '../../components/ui/EstadoVacio'
 import { Celda, EncabezadoTabla, FilaTabla, Tabla } from '../../components/ui/Tabla'
 import { Superficie } from '../../components/ui/Superficie'
@@ -40,6 +41,90 @@ const TONO_ESTADO: Record<EstadoCuenta, TonoBadge> = {
   bloqueada: 'peligro',
 }
 
+// Punto de color por rol en el filtro de Rol (BotonCircularExpansible). Reusa tonos ya
+// presentes en la pantalla: Superadministrador con el azul sólido del sidebar (--side-bg),
+// Administrador con el primario de marca, Coordinador Territorial con el ámbar de alerta.
+const COLOR_ROL: Record<Rol, string> = {
+  S: 'var(--side-bg)',
+  A: 'var(--color-primario)',
+  C: 'var(--color-ambar)',
+}
+
+function IconoMas() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M10 4v12" />
+      <path d="M4 10h12" />
+    </svg>
+  )
+}
+
+function IconoLupa() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="9" cy="9" r="6" />
+      <path d="M17 17l-3.5-3.5" />
+    </svg>
+  )
+}
+
+// Búsqueda de texto libre como botón circular que se convierte en input al pasar el cursor o
+// hacer foco — mismo lenguaje visual que los filtros de BotonCircularExpansible (observación
+// 6 del usuario: minimizar la barra de búsqueda a algo desplegable, igual que Rol y Estado).
+function BuscadorExpansible({ valor, onCambiar }: { valor: string; onCambiar: (v: string) => void }) {
+  const [expandido, setExpandido] = useState(false)
+
+  return (
+    <div
+      className="relative inline-block"
+      onMouseEnter={() => setExpandido(true)}
+      onMouseLeave={() => {
+        if (valor.trim() === '') setExpandido(false)
+      }}
+    >
+      {expandido ? (
+        <input
+          autoFocus
+          value={valor}
+          onChange={(e) => onCambiar(e.target.value)}
+          onBlur={() => {
+            if (valor.trim() === '') setExpandido(false)
+          }}
+          placeholder="Nombre o cédula"
+          className="h-10 w-48 rounded-full border border-borde bg-white pl-4 pr-3 text-sm text-grafito outline-none transition-[width] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] placeholder:text-texto-tenue focus:border-primario focus:ring-4 focus:ring-ambar/30"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setExpandido(true)}
+          aria-label="Buscar por nombre o cédula"
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-borde bg-white text-texto-suave outline-none transition-[width,background-color] duration-[220ms] ease-[cubic-bezier(0.4,0,0.2,1)] hover:bg-surface-sunken focus-visible:ring-4 focus-visible:ring-ambar/40"
+        >
+          <IconoLupa />
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function CuentasPage() {
   const auth = useAuth()
   const admin = useAdmin()
@@ -62,60 +147,64 @@ export function CuentasPage() {
     })
   }, [admin.cuentas, filtroRol, filtroEstado, busqueda])
 
-  if (!user || !cuentaActor) return null
+  if (!user) return null
 
+  /*
+    `cuentaActor` puede tardar en resolver (o no resolver nunca, para una sesión de demo cuya
+    cédula no vive en conexion-api): las cuentas ahora se cargan async desde el backend
+    (`admin.cargandoCuentas`), no de un seed local síncrono. Mientras carga o si el actor no
+    aparece, la pantalla sigue mostrando el shell — nunca una pantalla en blanco.
+  */
   // El enmascaramiento de PII lo debe aplicar el backend, no un formateador de frontend
   // (Reglas Transversales §PII). Aquí no hay backend: la pantalla respeta la intención.
-  const vePII = tienePermiso(cuentaActor, 'users:view_pii')
-  const puedeCrear = puedeCrearCuentas(cuentaActor)
+  const vePII = cuentaActor ? tienePermiso(cuentaActor, 'users:view_pii') : false
+  const puedeCrear = cuentaActor ? puedeCrearCuentas(cuentaActor) : false
   const hayFiltros = filtroRol !== 'todos' || filtroEstado !== 'todos' || busqueda.trim() !== ''
 
   return (
-    <PW04Layout
-      titulo="Cuentas administrativas"
-      descripcion="Todas las cuentas que hacen login en el portal. El identificador de acceso es la cédula, no el celular — es el carve-out del portal respecto al resto del sistema (PW-01)."
-      acciones={
-        puedeCrear ? (
-          <Button variante="ejecutivo" onClick={() => navigate('/PW-04/nueva')}>
-            Crear cuenta
-          </Button>
-        ) : (
-          <p className="max-w-xs text-right text-xs leading-relaxed text-texto-suave">
-            Crear cuentas exige el permiso <code>accounts:create</code>, que no trae ningún rol
-            por defecto. Pídeselo a un Superadministrador con esa cesión.
-          </p>
-        )
-      }
-    >
+    <PW04Layout titulo="Cuentas administrativas">
       <Superficie className="overflow-hidden">
-        <div className="flex flex-wrap items-end gap-3 border-b border-white/[0.07] px-6 py-4">
-          <label className="flex flex-col gap-1.5">
-            <span className="font-heading text-xs font-bold text-texto-suave">Buscar</span>
-            <input
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Nombre o cédula"
-              className="h-10 w-56 rounded-full border-[1.5px] border-borde/40 bg-fondo/[0.05] px-4 text-sm text-grafito outline-none transition placeholder:text-texto-suave/70 focus:border-primario focus:ring-4 focus:ring-ambar/30"
-            />
-          </label>
-          <Filtro
+        <div className="flex flex-wrap items-center gap-3 border-b border-borde px-6 py-4">
+          <BuscadorExpansible valor={busqueda} onCambiar={setBusqueda} />
+          <BotonCircularExpansible
             etiqueta="Rol"
-            valor={filtroRol}
-            onCambiar={(v) => setFiltroRol(v as Rol | 'todos')}
-            opciones={[['todos', 'Todos'], ...Object.entries(ROLES)]}
+            valorActual={filtroRol}
+            onSeleccionar={(v) => setFiltroRol(v as Rol | 'todos')}
+            opciones={[
+              { valor: 'todos', etiqueta: 'Todos' },
+              ...(Object.entries(ROLES) as [Rol, string][]).map(([valor, etiqueta]) => ({
+                valor,
+                etiqueta,
+                color: COLOR_ROL[valor],
+              })),
+            ]}
           />
-          <Filtro
+          <BotonCircularExpansible
             etiqueta="Estado"
-            valor={filtroEstado}
-            onCambiar={(v) => setFiltroEstado(v as EstadoCuenta | 'todos')}
-            opciones={[['todos', 'Todos'], ...Object.entries(ESTADOS_CUENTA)]}
+            valorActual={filtroEstado}
+            onSeleccionar={(v) => setFiltroEstado(v as EstadoCuenta | 'todos')}
+            opciones={[
+              { valor: 'todos', etiqueta: 'Todos' },
+              ...Object.entries(ESTADOS_CUENTA).map(([valor, etiqueta]) => ({ valor, etiqueta })),
+            ]}
           />
-          <p className="ml-auto text-xs text-texto-suave">
+          <p className="text-xs text-texto-suave">
             {filtradas.length} de {admin.cuentas.length} cuentas
           </p>
+          {puedeCrear && (
+            <BotonCircularExpansible
+              className="ml-auto"
+              solido
+              icono={<IconoMas />}
+              etiqueta="Crear cuenta"
+              onClick={() => navigate('/PW-04/nueva')}
+            />
+          )}
         </div>
 
-        {filtradas.length === 0 ? (
+        {admin.cargandoCuentas ? (
+          <EstadoVacio motivo="sin-datos" titulo="Cargando cuentas…" descripcion="Consultando el listado en el servidor." />
+        ) : filtradas.length === 0 ? (
           <EstadoVacio
             motivo={hayFiltros ? 'sin-resultados' : 'sin-datos'}
             titulo={hayFiltros ? 'Ninguna cuenta coincide con tu filtro' : 'Todavía no hay cuentas administrativas'}
@@ -142,7 +231,7 @@ export function CuentasPage() {
         ) : (
           <Tabla>
             <EncabezadoTabla
-              columnas={['Cuenta', 'Rol', 'Alcance', 'Estado', 'Permisos', 'Último acceso']}
+              columnas={['Cuenta', 'Rol', 'Alcance', 'Estado', '', 'Último acceso']}
             />
             <tbody>
               {filtradas.map((cuenta) => {
@@ -164,7 +253,11 @@ export function CuentasPage() {
                       >
                         <span className="flex items-center gap-2 font-heading font-bold text-grafito">
                           {cuenta.nombre}
-                          {cuenta.esRaiz && <Badge tono="alerta">Raíz</Badge>}
+                          {cuenta.esRaiz && (
+                            <Badge tono="alerta" sinIcono>
+                              Raíz
+                            </Badge>
+                          )}
                         </span>
                         <span className="mt-0.5 block text-xs text-texto-suave">
                           {vePII ? cuenta.cedula : enmascararCedula(cuenta.cedula)}
@@ -181,8 +274,16 @@ export function CuentasPage() {
                         <span className="text-xs text-texto-suave">Plantilla del rol</span>
                       ) : (
                         <span className="flex flex-wrap gap-1.5">
-                          {ampliados.length > 0 && <Badge tono="alerta">+{ampliados.length}</Badge>}
-                          {reducidos.length > 0 && <Badge tono="neutro">−{reducidos.length}</Badge>}
+                          {ampliados.length > 0 && (
+                            <Badge tono="alerta" sinIcono>
+                              +{ampliados.length}
+                            </Badge>
+                          )}
+                          {reducidos.length > 0 && (
+                            <Badge tono="neutro" sinIcono>
+                              −{reducidos.length}
+                            </Badge>
+                          )}
                         </span>
                       )}
                     </Celda>
@@ -202,41 +303,6 @@ export function CuentasPage() {
           </Tabla>
         )}
       </Superficie>
-
-      <p className="px-1 text-xs leading-relaxed text-texto-suave">
-        Las cuentas activas sin acceso en más de {DIAS_INACTIVIDAD_SOSPECHOSA} días se marcan en
-        ámbar: PW-04 las llama "un riesgo de seguridad silencioso". El umbral es una propuesta
-        de este demo, no una decisión cerrada de la bóveda.
-      </p>
     </PW04Layout>
-  )
-}
-
-function Filtro({
-  etiqueta,
-  valor,
-  onCambiar,
-  opciones,
-}: {
-  etiqueta: string
-  valor: string
-  onCambiar: (valor: string) => void
-  opciones: [string, string][]
-}) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="font-heading text-xs font-bold text-texto-suave">{etiqueta}</span>
-      <select
-        value={valor}
-        onChange={(e) => onCambiar(e.target.value)}
-        className="h-10 rounded-full border-[1.5px] border-borde/40 bg-fondo/[0.05] px-4 text-sm text-grafito outline-none transition focus:border-primario focus:ring-4 focus:ring-ambar/30"
-      >
-        {opciones.map(([v, etiquetaOpcion]) => (
-          <option key={v} value={v} className="bg-[#111823] text-grafito">
-            {etiquetaOpcion}
-          </option>
-        ))}
-      </select>
-    </label>
   )
 }

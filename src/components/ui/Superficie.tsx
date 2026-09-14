@@ -1,23 +1,23 @@
 import type { HTMLAttributes, ReactNode } from 'react'
 
 /*
-  La tarjeta de vidrio del portal, extraída del tratamiento que AuthLayout estrenó en el
-  flujo de acceso (Q-1253). Q-1250 fijó la paleta marino/ámbar como identidad visual única
-  del portal para las 18 categorías, así que la zona autenticada usa el mismo lenguaje que
-  el login en vez de la paleta café/institucional anterior.
+  La tarjeta de superficie del portal. Q-1250 (2026-09-12) había fijado el vidrio oscuro
+  marino/ámbar como identidad visual única del portal; el reskin claro del 2026-09-13
+  (revierte Q-1250 explícitamente — ver memoria/hilos/portal-web-reskin-claro.md) la
+  reemplaza por superficies sólidas claras, sin vidrio ni blur: fondo blanco/gris muy
+  claro sobre el fondo de página --color-fondo, con sombra suave en vez de negro pesado.
 
-  Tres densidades, no una: el sidebar y las tablas necesitan menos brillo y menos radio que
-  una tarjeta suelta, o la pantalla entera se vuelve un campo de cristales flotando.
+  Tres densidades, no una: el sidebar y las tablas necesitan menos relieve que una tarjeta
+  suelta, o la pantalla entera se vuelve un campo de tarjetas flotando.
 */
 
 type Tono = 'tarjeta' | 'panel' | 'sutil'
 
 const TONOS: Record<Tono, string> = {
   tarjeta:
-    'rounded-[24px] border border-white/10 bg-gradient-to-b from-[#faf6ee]/[0.08] to-[#faf6ee]/[0.03] shadow-[0_24px_60px_rgba(0,0,0,0.45),0_1px_0_rgba(255,255,255,0.12)_inset] backdrop-blur-[18px] backdrop-saturate-[1.2]',
-  panel:
-    'rounded-[20px] border border-white/[0.07] bg-[#faf6ee]/[0.04] backdrop-blur-[12px]',
-  sutil: 'rounded-[16px] border border-white/[0.06] bg-[#faf6ee]/[0.025]',
+    'rounded-[18px] border border-borde bg-white shadow-[0_1px_2px_rgba(28,36,64,0.04),0_12px_32px_rgba(28,36,64,0.08)]',
+  panel: 'rounded-[16px] border border-borde bg-white',
+  sutil: 'rounded-[14px] border border-borde bg-surface-sunken',
 }
 
 interface Props extends HTMLAttributes<HTMLDivElement> {
@@ -40,7 +40,7 @@ export function CabeceraSuperficie({
   acciones?: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.07] px-6 py-5">
+    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-borde px-6 py-5">
       <div className="min-w-0">
         <h2 className="font-heading text-lg font-extrabold tracking-tight text-grafito">{titulo}</h2>
         {descripcion && <p className="mt-1 text-sm leading-relaxed text-texto-suave">{descripcion}</p>}

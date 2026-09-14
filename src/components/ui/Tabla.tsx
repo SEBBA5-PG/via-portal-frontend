@@ -16,7 +16,7 @@ export function Tabla({ children }: { children: ReactNode }) {
 export function EncabezadoTabla({ columnas }: { columnas: ReactNode[] }) {
   return (
     <thead>
-      <tr className="border-b border-white/[0.07]">
+      <tr className="border-b border-borde">
         {columnas.map((columna, i) => (
           <th
             key={i}
@@ -41,7 +41,7 @@ export function FilaTabla({
   etiqueta?: string
 }) {
   if (!onClick) {
-    return <tr className="border-b border-white/[0.04] last:border-0">{children}</tr>
+    return <tr className="border-b border-borde last:border-0">{children}</tr>
   }
   // Fila navegable: el manejador vive en la fila, pero el foco de teclado lo recibe una
   // celda-botón real dentro de ella (ver CeldaPrincipal) para que sea alcanzable sin ratón.
@@ -49,7 +49,7 @@ export function FilaTabla({
     <tr
       onClick={onClick}
       aria-label={etiqueta}
-      className="cursor-pointer border-b border-white/[0.04] transition-colors last:border-0 hover:bg-white/[0.035]"
+      className="cursor-pointer border-b border-borde transition-colors last:border-0 hover:bg-surface-sunken"
     >
       {children}
     </tr>
