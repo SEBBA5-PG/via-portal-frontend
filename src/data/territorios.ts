@@ -36,14 +36,10 @@ export const TERRITORIOS: Territorio[] = [
   { id: 't-campoalegre', nombre: 'Campoalegre', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-colombia-huila', nombre: 'Colombia', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-hobo', nombre: 'Hobo', tipo: 'municipio', padreId: 't-norte' },
-  { id: 't-iquira', nombre: 'Íquira', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-palermo', nombre: 'Palermo', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-rivera', nombre: 'Rivera', tipo: 'municipio', padreId: 't-norte' },
-  { id: 't-santamaria', nombre: 'Santa María', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-tello', nombre: 'Tello', tipo: 'municipio', padreId: 't-norte' },
-  { id: 't-teruel', nombre: 'Teruel', tipo: 'municipio', padreId: 't-norte' },
   { id: 't-villavieja', nombre: 'Villavieja', tipo: 'municipio', padreId: 't-norte' },
-  { id: 't-yaguara', nombre: 'Yaguará', tipo: 'municipio', padreId: 't-norte' },
 
   { id: 't-centro', nombre: 'Subregión Centro', tipo: 'region', padreId: 't-huila' },
   { id: 't-garzon', nombre: 'Garzón', tipo: 'municipio', padreId: 't-centro' },
@@ -72,6 +68,10 @@ export const TERRITORIOS: Territorio[] = [
   { id: 't-nataga', nombre: 'Nátaga', tipo: 'municipio', padreId: 't-occidente' },
   { id: 't-paicol', nombre: 'Paicol', tipo: 'municipio', padreId: 't-occidente' },
   { id: 't-tesalia', nombre: 'Tesalia', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-iquira', nombre: 'Íquira', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-yaguara', nombre: 'Yaguará', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-teruel', nombre: 'Teruel', tipo: 'municipio', padreId: 't-occidente' },
+  { id: 't-santamaria', nombre: 'Santa María', tipo: 'municipio', padreId: 't-occidente' },
 ]
 
 const POR_ID = new Map(TERRITORIOS.map((t) => [t.id, t]))
