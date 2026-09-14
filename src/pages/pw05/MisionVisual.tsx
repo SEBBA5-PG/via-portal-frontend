@@ -1,7 +1,7 @@
 import { Badge, type TonoBadge } from '../../components/ui/Badge'
 import { Superficie } from '../../components/ui/Superficie'
 import { ESTADOS_MISION, tiempoRestante, type EstadoMision, type Familia, type Mision } from '../../data/misiones'
-import { territorioPorId } from '../../data/territorios'
+import { describirAlcance } from '../../data/territorios'
 
 const TONO: Record<EstadoMision, TonoBadge> = {
   borrador: 'neutro',
@@ -54,7 +54,7 @@ function IconoFamilia({ familia }: { familia: Familia }) {
   que ESQ pide "idéntica a la tarjeta".
 */
 export function TarjetaMision({ mision, ahora }: { mision: Mision; ahora: number }) {
-  const territorio = mision.territorioId ? territorioPorId(mision.territorioId)?.nombre : null
+  const territorio = mision.territorioIds.length > 0 ? describirAlcance(mision.territorioIds) : null
   return (
     <Superficie className="flex gap-4 px-5 py-5">
       <IconoFamilia familia={mision.familia} />

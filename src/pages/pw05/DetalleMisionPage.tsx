@@ -3,9 +3,11 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CategoriaLayout } from '../../components/CategoriaLayout'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
+import { BotonVolver } from '../../components/ui/BotonVolver'
 import { Marcable } from '../../components/ui/Marcable'
 import { Modal } from '../../components/ui/Modal'
 import { SelectField } from '../../components/ui/SelectField'
+import { SelectorFechaHora } from '../../components/ui/SelectorFechaHora'
 import { CabeceraSuperficie, Superficie } from '../../components/ui/Superficie'
 import { TextField } from '../../components/ui/TextField'
 import { BadgeEstadoMision, TarjetaMision } from './MisionVisual'
@@ -25,7 +27,7 @@ import { ROLES_JUEGO, nombrePlaya } from '../../data/usuariosApp'
 import { nombreDeCuenta } from '../../data/cuentas'
 import { ETIQUETA_EVENTO, formatoFechaHora } from '../../data/auditoria'
 import { TIPOS_SOLICITUD_OPERACION, type SolicitudOperacion, type TipoSolicitudOperacion } from '../../data/operacion'
-import { territorioPorId } from '../../data/territorios'
+import { describirAlcance } from '../../data/territorios'
 import { tienePermiso } from '../../dominio/permisos'
 import {
   estimarAudiencia,
@@ -94,22 +96,19 @@ export function DetalleMisionPage() {
 
   return (
     <CategoriaLayout
-      categoria="PW-05 · Misiones"
       titulo={mision.nombre || 'Misión sin nombre'}
       descripcion={
         <>
           {FAMILIAS[mision.familia]}
           {mision.subtipo && ` · ${SUBTIPOS[mision.subtipo]}`} ·{' '}
-          {mision.ambito === 'global' ? 'Global' : territorioPorId(mision.territorioId ?? '')?.nombre} · creada por{' '}
+          {mision.ambito === 'global' ? 'Global' : describirAlcance(mision.territorioIds)} · creada por{' '}
           {nombreDeCuenta(mision.creadorId, admin.cuentas)} · versión {mision.version}
         </>
       }
       acciones={
         <>
           <BadgeEstadoMision estado={mision.estado} />
-          <Button variante="ejecutivo-suave" onClick={() => navigate('/PW-05')}>
-            Volver
-          </Button>
+          <BotonVolver a="/PW-05" etiqueta="Volver a Misiones" />
         </>
       }
     >
@@ -270,7 +269,14 @@ export function DetalleMisionPage() {
           <div className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
             <p className="text-sm text-texto-suave">
               ≈ {estimarAudiencia(mision, op.usuarios)} usuarios del demo cumplen la segmentación ·{' '}
-              {op.misiones.filter((m) => m.id !== mision.id && m.estado === 'publicada' && m.territorioId === mision.territorioId).length}{' '}
+              {
+                op.misiones.filter(
+                  (m) =>
+                    m.id !== mision.id &&
+                    m.estado === 'publicada' &&
+                    m.territorioIds.some((id) => mision.territorioIds.includes(id)),
+                ).length
+              }{' '}
               misiones publicadas más en el mismo territorio.
             </p>
             <div className="flex gap-2">
@@ -358,7 +364,7 @@ export function DetalleMisionPage() {
             <Marcable tipo="radio" nombre="duracion" marcado={!programada} onCambiar={() => setProgramada(false)} etiqueta="Indefinida" detalle="Se reanuda a mano." />
             <Marcable tipo="radio" nombre="duracion" marcado={programada} onCambiar={() => setProgramada(true)} etiqueta="Programada" />
           </div>
-          {programada && <TextField etiqueta="Reanudar el" type="datetime-local" value={hasta} onChange={(e) => setHasta(e.target.value)} />}
+          {programada && <SelectorFechaHora etiqueta="Reanudar el" value={hasta} onChange={setHasta} />}
           <Marcable marcado={notificar} onCambiar={setNotificar} etiqueta={`Notificar a los ${mision.inscritos} inscritos`} />
         </div>
       </Modal>

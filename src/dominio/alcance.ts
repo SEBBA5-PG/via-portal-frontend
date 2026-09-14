@@ -15,6 +15,14 @@ export function esAlcanceGlobal(cuenta: CuentaAdmin): boolean {
   return cuenta.territorioIds.includes(TERRITORIO_RAIZ)
 }
 
+// Variante de `alcanza` para el alcance territorial MÚLTIPLE de una misión (PW-05: una misión
+// local puede mezclar varias subregiones/municipios, no solo uno) — [] se trata igual que
+// `territorioId: null` en `alcanza`: alcanzable por cualquiera.
+export function alcanzaAlgunoDe(cuenta: CuentaAdmin, territorioIds: string[]): boolean {
+  if (territorioIds.length === 0) return true
+  return territorioIds.some((id) => alcanza(cuenta, id))
+}
+
 // ¿El territorio `hijo` cae dentro de `contenedor`? (Soacha dentro de Cundinamarca, etc.)
 export function contieneTerritorio(contenedor: string, hijo: string): boolean {
   return territoriosAlcanzados([contenedor]).has(hijo)

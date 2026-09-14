@@ -331,7 +331,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cc = cedula.trim()
     const user = usuarios.find((u) => u.cedula === cc)
 
-    if (!user) {
+    // Cuentas de conexion-api (backend real) SIEMPRE revalidan el PIN contra el servidor, en
+    // cada login — nunca contra el PIN cacheado en `usuarios`. Esa caché solo existe para el
+    // bookkeeping local de 2FA/sesión entre pasos. Si se comparara aquí contra `user.pin`
+    // (como el resto de este flujo hace para SEED_USERS), un segundo login con la misma
+    // cédula nunca volvería a llamar loginBackend → nunca se establece cookie de sesión real
+    // en conexion-api → cualquier pantalla que dependa del backend (PW-04 cuentas, etc.)
+    // queda huérfana con 401 aunque la UI muestre "sesión activa" (ese estado sale de
+    // localStorage, no del servidor).
+    if (!user || user.origenBackend) {
       const resultado = await loginBackend(cc, pin)
       if (!resultado.ok) {
         return { ok: false, tipo: 'sin-cuenta', mensaje: resultado.mensaje }
@@ -345,6 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: cuenta.email,
         telefonoWhatsapp: cuenta.telefonoWhatsapp,
         pin,
+        origenBackend: true,
       }
       setUsuarios((prev) => [...prev.filter((u) => u.id !== nuevo.id), nuevo])
       return continuarTrasPinCorrecto(nuevo)

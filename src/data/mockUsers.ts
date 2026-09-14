@@ -11,6 +11,10 @@ export interface DemoUser {
   rol: Rol
   email: string
   telefonoWhatsapp: string
+  // true si esta cuenta viene de conexion-api (backend real), no de SEED_USERS. El PIN se
+  // cachea aquí solo para el bookkeeping local de 2FA/sesión — la validación del PIN en sí
+  // siempre vuelve a pasar por loginBackend, nunca por comparación local (ver authStore.login).
+  origenBackend?: boolean
 }
 
 export const SEED_USERS: DemoUser[] = [

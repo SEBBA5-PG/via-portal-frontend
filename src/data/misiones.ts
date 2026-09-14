@@ -99,6 +99,32 @@ export interface PausaMision {
   notificar: boolean
 }
 
+/*
+  Banco de preguntas de Trivia/Encuesta ([DECISIÓN BORRADOR] — la wiki (Retos y Mecánicas de
+  Juego §Pendiente de validar) deja el "esquema de datos completo de misiones" para
+  desarrollo; esto es la propuesta concreta del asistente, no algo ya cerrado en la bóveda).
+
+  Misma forma para las dos, porque las dos son "una pregunta + opciones de respuesta" —
+  `correcta`/`explicacion` solo aplican y se piden en Trivia (autoevaluada, necesita saber
+  qué responder bien); en Encuesta quedan sin usar, porque no hay respuesta "correcta".
+*/
+export interface OpcionPregunta {
+  id: string
+  texto: string
+  // Solo Trivia.
+  correcta?: boolean
+  // Solo Trivia: por qué esta opción es correcta o incorrecta — se le muestra al usuario
+  // después de responder (observación del usuario: "registrar la descripción de la
+  // respuesta claramente, señalando la correcta y la incorrecta").
+  explicacion?: string
+}
+
+export interface Pregunta {
+  id: string
+  enunciado: string
+  opciones: OpcionPregunta[]
+}
+
 export interface Mision {
   id: string
   // Campo `version` (wiki §Gobernanza): la evidencia se evalúa contra las reglas vigentes al
@@ -109,8 +135,9 @@ export interface Mision {
   familia: Familia
   subtipo: Subtipo | null
   ambito: Ambito
-  // null para misiones globales. Para locales, el territorio del creador.
-  territorioId: string | null
+  // [] para misiones globales. Para locales: uno o más ids (subregión completa o municipios
+  // sueltos, mezclables) — ver SelectorTerritorioMision en el asistente de PW-05.
+  territorioIds: string[]
   estado: EstadoMision
   creadorId: string
   fechaCreacion: number
@@ -121,6 +148,8 @@ export interface Mision {
   cupoMaximo: number | null
   // Una Digital que vincula encuesta arrastra el BLOQUEANTE legal de M13 Q-0535 (Ley 1581).
   encuestaVinculada: boolean
+  // Solo subtipo trivia/encuesta — ver Pregunta arriba. [] en cualquier otro subtipo.
+  preguntas: Pregunta[]
   // Segmentación completa: [DECISIÓN BORRADOR] en ESQ Paso 3.
   playaMin: number
   playaMax: number | null
@@ -168,7 +197,7 @@ function base(parcial: Partial<Mision> & Pick<Mision, 'id' | 'nombre' | 'familia
     descripcion: 'Descripción de demo para esta misión.',
     subtipo: null,
     ambito: 'global',
-    territorioId: null,
+    territorioIds: [],
     fechaCreacion: AHORA - 10 * DIA,
     fechaEdicion: AHORA - 3 * DIA,
     recompensaAgatas: 50,
@@ -176,6 +205,7 @@ function base(parcial: Partial<Mision> & Pick<Mision, 'id' | 'nombre' | 'familia
     requiereCupo: false,
     cupoMaximo: null,
     encuestaVinculada: false,
+    preguntas: [],
     playaMin: 1,
     playaMax: null,
     escudos: ['explorador', 'facilitador', 'mentor'],
@@ -210,7 +240,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'barrido',
     ambito: 'local',
-    territorioId: 't-soacha',
+    territorioIds: ['t-garzon'],
     estado: 'publicada',
     creadorId: 'u-coordinador',
     recompensaAgatas: 120,
@@ -229,7 +259,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'reunion',
     ambito: 'local',
-    territorioId: 't-soacha',
+    territorioIds: ['t-garzon'],
     estado: 'pendiente_aprobacion',
     creadorId: 'u-coordinador',
     recompensaAgatas: 200,
@@ -259,7 +289,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'visita',
     ambito: 'local',
-    territorioId: 't-medellin',
+    territorioIds: ['t-pitalito'],
     estado: 'pausada',
     creadorId: 'c-jorge',
     recompensaAgatas: 150,
@@ -276,7 +306,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'marketing_movil',
     ambito: 'local',
-    territorioId: 't-barranquilla',
+    territorioIds: ['t-laplata'],
     estado: 'agotada',
     creadorId: 'u-admin',
     recompensaAgatas: 90,
@@ -309,7 +339,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'barrido',
     ambito: 'local',
-    territorioId: 't-cali',
+    territorioIds: ['t-neiva'],
     estado: 'cancelada',
     creadorId: 'u-admin',
     recompensaAgatas: 110,
@@ -339,7 +369,7 @@ export const MISIONES_SEED: Mision[] = [
     familia: 'territorial',
     subtipo: 'reunion',
     ambito: 'local',
-    territorioId: 't-soacha',
+    territorioIds: ['t-garzon'],
     estado: 'borrador',
     creadorId: 'u-coordinador',
     recompensaAgatas: 150,

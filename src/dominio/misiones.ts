@@ -1,7 +1,7 @@
 import type { CuentaAdmin } from '../data/cuentas'
 import type { UsuarioApp } from '../data/usuariosApp'
-import type { Ambito, Mision } from '../data/misiones'
-import { alcanza, contieneTerritorio } from './alcance'
+import type { Ambito, Mision, Pregunta, Subtipo } from '../data/misiones'
+import { alcanzaAlgunoDe, contieneTerritorio } from './alcance'
 import { tienePermiso } from './permisos'
 
 /*
@@ -13,7 +13,7 @@ import { tienePermiso } from './permisos'
 // se le muestran: todavía no son de nadie más que de quien los escribe (propuesta del demo).
 export function misionesVisiblesPara(actor: CuentaAdmin, misiones: Mision[]): Mision[] {
   return misiones.filter((m) => {
-    if (m.ambito === 'local' && !alcanza(actor, m.territorioId)) return false
+    if (m.ambito === 'local' && !alcanzaAlgunoDe(actor, m.territorioIds)) return false
     if (actor.rol === 'C' && m.estado === 'borrador' && m.creadorId !== actor.id) return false
     return true
   })
@@ -64,7 +64,7 @@ export const CAMPOS_REGLA = ['recompensa', 'evidencia', 'geocerca', 'cupo', 'seg
 export function puedeEditar(actor: CuentaAdmin, m: Mision): boolean {
   if (m.familia === 'sistema') return false
   if (nivelEdicion(m) === 'ninguno') return false
-  if (m.ambito === 'local' && !alcanza(actor, m.territorioId)) return false
+  if (m.ambito === 'local' && !alcanzaAlgunoDe(actor, m.territorioIds)) return false
   if (actor.rol === 'C') {
     // El Coordinador edita solo lo suyo y solo antes de publicarse (Catálogo: "la suya").
     return (
@@ -79,12 +79,12 @@ export function puedeEditar(actor: CuentaAdmin, m: Mision): boolean {
 }
 
 export function puedeAprobar(actor: CuentaAdmin, m: Mision): boolean {
-  return m.estado === 'pendiente_aprobacion' && publicaDirecto(actor) && alcanza(actor, m.territorioId)
+  return m.estado === 'pendiente_aprobacion' && publicaDirecto(actor) && alcanzaAlgunoDe(actor, m.territorioIds)
 }
 
 // `missions:pause_cancel` es techo fijo: el Coordinador nunca lo alcanza.
 function gobiernaMision(actor: CuentaAdmin, m: Mision): boolean {
-  return tienePermiso(actor, 'missions:pause_cancel') && alcanza(actor, m.territorioId) && m.familia !== 'sistema'
+  return tienePermiso(actor, 'missions:pause_cancel') && alcanzaAlgunoDe(actor, m.territorioIds) && m.familia !== 'sistema'
 }
 
 export function puedePausar(actor: CuentaAdmin, m: Mision): boolean {
@@ -106,7 +106,7 @@ export function puedeSolicitarPausaCancelacion(actor: CuentaAdmin, m: Mision, ya
   return (
     !tienePermiso(actor, 'missions:pause_cancel') &&
     tienePermiso(actor, 'missions:request_pause_cancel') &&
-    alcanza(actor, m.territorioId) &&
+    alcanzaAlgunoDe(actor, m.territorioIds) &&
     (m.estado === 'publicada' || m.estado === 'pausada') &&
     m.familia !== 'sistema' &&
     !yaSolicitada
@@ -128,23 +128,51 @@ export function estimarAudiencia(m: Mision, usuarios: UsuarioApp[]): number {
     if (u.playa < m.playaMin) return false
     if (m.playaMax !== null && u.playa > m.playaMax) return false
     if (!m.escudos.includes(u.rolJuego)) return false
-    if (m.ambito === 'local' && m.territorioId && !contieneTerritorio(m.territorioId, u.municipioId)) return false
+    if (
+      m.ambito === 'local' &&
+      m.territorioIds.length > 0 &&
+      !m.territorioIds.some((id) => contieneTerritorio(id, u.municipioId))
+    )
+      return false
     return true
   }).length
+}
+
+// Trivia y Encuesta comparten forma (pregunta + opciones); solo Trivia exige una opción
+// marcada correcta por pregunta — una Encuesta no tiene respuesta "correcta".
+export function erroresDePreguntas(preguntas: Pregunta[], subtipo: Subtipo): string[] {
+  const errores: string[] = []
+  if (preguntas.length === 0) {
+    errores.push('Agrega al menos una pregunta.')
+    return errores
+  }
+  preguntas.forEach((p, i) => {
+    if (p.enunciado.trim().length < 5) errores.push(`Pregunta ${i + 1}: escribe el enunciado.`)
+    const validas = p.opciones.filter((o) => o.texto.trim().length > 0)
+    if (validas.length < 2) errores.push(`Pregunta ${i + 1}: agrega al menos 2 opciones de respuesta.`)
+    if (subtipo === 'trivia' && !p.opciones.some((o) => o.correcta && o.texto.trim().length > 0)) {
+      errores.push(`Pregunta ${i + 1}: marca cuál opción es la correcta.`)
+    }
+  })
+  return errores
 }
 
 export function erroresDePaso(m: Mision, paso: number): string[] {
   const errores: string[] = []
   if (paso === 1) {
-    if (m.ambito === 'local' && !m.territorioId) errores.push('Elige el territorio de la misión local.')
+    if (m.ambito === 'local' && m.territorioIds.length === 0) errores.push('Elige uno o más territorios de la misión local.')
   }
   if (paso === 2) {
     if (m.nombre.trim().length < 5) errores.push('El nombre necesita al menos 5 caracteres.')
-    if (m.descripcion.trim().length < 10) errores.push('Describe la misión en al menos 10 caracteres.')
     if (!m.subtipo) errores.push('Elige el subtipo.')
     if (m.recompensaAgatas <= 0) errores.push('La recompensa en Ágatas debe ser mayor que cero.')
     if (m.familia === 'territorial' && m.evidencia.length === 0) errores.push('Marca al menos un tipo de evidencia.')
     if (m.requiereCupo && (!m.cupoMaximo || m.cupoMaximo <= 0)) errores.push('Indica el cupo máximo.')
+    if (m.subtipo === 'trivia' || m.subtipo === 'encuesta') {
+      errores.push(...erroresDePreguntas(m.preguntas, m.subtipo))
+    } else if (m.descripcion.trim().length < 10) {
+      errores.push('Describe la misión en al menos 10 caracteres.')
+    }
   }
   if (paso === 3) {
     if (m.escudos.length === 0) errores.push('Elige al menos un rol de juego objetivo.')
@@ -173,7 +201,7 @@ export function misionVacia(actor: CuentaAdmin): Mision {
     ambito: local ? 'local' : 'global',
     // ESQ Paso 1: para el Coordinador el ámbito queda "bloqueado a su propio
     // ambito_territorial_id".
-    territorioId: local ? (actor.territorioIds[0] ?? null) : null,
+    territorioIds: local ? actor.territorioIds : [],
     estado: 'borrador',
     creadorId: actor.id,
     fechaCreacion: ahora,
@@ -183,6 +211,7 @@ export function misionVacia(actor: CuentaAdmin): Mision {
     requiereCupo: false,
     cupoMaximo: null,
     encuestaVinculada: false,
+    preguntas: [],
     playaMin: 1,
     playaMax: null,
     escudos: ['explorador', 'facilitador', 'mentor'],

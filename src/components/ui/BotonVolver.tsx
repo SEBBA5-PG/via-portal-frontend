@@ -27,14 +27,29 @@ function IconoFlechaAtras() {
   )
 }
 
-export function BotonVolver({ a, etiqueta = 'Volver' }: { a: string; etiqueta?: string }) {
+export function BotonVolver({
+  a,
+  etiqueta = 'Volver',
+  interceptar,
+}: {
+  a: string
+  etiqueta?: string
+  // Para pantallas con progreso sin guardar (asistentes): en vez de navegar directo, se le
+  // entrega la navegación real como función y quien llama decide si la ejecuta ya mismo o
+  // primero pide confirmación (p. ej. con useConfirmarSalida).
+  interceptar?: (ir: () => void) => void
+}) {
   const navigate = useNavigate()
   const [expandido, setExpandido] = useState(false)
 
   return (
     <button
       type="button"
-      onClick={() => navigate(a)}
+      onClick={() => {
+        const ir = () => navigate(a)
+        if (interceptar) interceptar(ir)
+        else ir()
+      }}
       onMouseEnter={() => setExpandido(true)}
       onMouseLeave={() => setExpandido(false)}
       onFocus={() => setExpandido(true)}
