@@ -5,7 +5,7 @@ import { AppShell } from '../components/AppShell'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
 import { Superficie, CabeceraSuperficie } from '../components/ui/Superficie'
-import { CroquisCalorHuila } from '../components/CroquisCalorHuila'
+import { MapaCalorHuila } from '../components/MapaCalorHuila'
 import { useAuth } from '../state/authStore'
 import { useAdmin } from '../state/adminStore'
 import { ROLES } from '../data/roles'
@@ -320,10 +320,10 @@ export function HomePage() {
           <Superficie>
             <CabeceraSuperficie
               titulo="Zonas calientes por municipio"
-              descripcion="Croquis esquemático por subregión (no es el mapa geográfico real del Huila) — cada celda es un municipio, más oscuro = más usuarios."
+              descripcion="Croquis del Huila y sus 37 municipios — más oscuro = más usuarios. Clic u hover sobre un municipio para ver su detalle."
             />
             <div className="px-6 py-5">
-              <CroquisCalorHuila filas={resumenApp.mapaCalor} />
+              <MapaCalorHuila filas={resumenApp.mapaCalor} />
             </div>
           </Superficie>
         )}
