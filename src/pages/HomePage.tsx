@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppShell } from '../components/AppShell'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -10,31 +11,20 @@ import { ROLES } from '../data/roles'
 import { describirAlcance } from '../data/territorios'
 import { pendientesParaFirmar, tienePermiso } from '../dominio/permisos'
 import { puedeAprobar } from '../dominio/misiones'
-import { usuariosVisiblesPara } from '../dominio/usuarios'
-import {
-  formatoEntero,
-  formatoTendenciaPct,
-  promedioIngresoSemanal,
-  resumenPorPlaya,
-  resumenPorTerritorio,
-} from '../dominio/metricas'
+import { formatoEntero, formatoTendenciaPct } from '../dominio/metricas'
 import { nombrePlaya } from '../data/usuariosApp'
+import { obtenerResumenUsuariosApp, type ResumenUsuariosApp } from '../lib/usuariosAppApi'
 import { useOperacion } from '../state/operacionStore'
 
-// Barrita de proporción para los desgloses de "Dónde están tus usuarios" — mismo elemento
-// para territorio y para Playa, así se repite igual de fila en fila.
-function FilaBarra({ etiqueta, valor, maximo }: { etiqueta: string; valor: number; maximo: number }) {
-  const ancho = maximo > 0 && valor > 0 ? Math.max((valor / maximo) * 100, 3) : 0
+// Paleta de las Playas del embudo (1 = Achira, más gente → 7 = Huila, menos gente): un
+// degradado propio, no el color primario del portal, para no confundir "Playa" con "estado".
+const COLORES_PLAYA = ['#c7f0dc', '#a3e4c4', '#7fd7ac', '#5bc394', '#3fae7f', '#2b8f68', '#1c7354']
+
+function EtiquetaEje({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
   return (
-    <li className="flex items-center gap-3">
-      <span className="w-28 shrink-0 truncate text-xs text-grafito/85" title={etiqueta}>
-        {etiqueta}
-      </span>
-      <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
-        <span className="block h-full rounded-full bg-primario" style={{ width: `${ancho}%` }} />
-      </span>
-      <span className="w-9 shrink-0 text-right font-mono text-xs text-texto-suave">{formatoEntero(valor)}</span>
-    </li>
+    <text x={x} y={y} dy={4} textAnchor="end" className="fill-grafito/85 text-[11px]">
+      {payload?.value}
+    </text>
   )
 }
 
@@ -54,11 +44,12 @@ function formatoRestante(ms: number): string {
   Y su alcance: "solo tarjetas KPI livianas (número + tendencia, sin gráficos ni filtros)" —
   la analítica profunda vive en PW-17/M16, no aquí.
 
-  Las tarjetas de usuarios (`usuarios_total`, `usuarios_nuevos`) SÍ son reales: se calculan
-  sobre `USUARIOS_APP_SEED` (dominio/metricas.ts), respetando el mismo TerritorialScope que
-  PW-03 — un Coordinador ve su territorio, no el Huila entero. El resto sigue siendo cifra de
-  demo: qué KPIs son obligatorios para el MVP, cuáles van en tiempo real y cuál es la fuente
-  de verdad de cada uno sigue ABIERTO en M16 (Q-0631/Q-0633/Q-0635).
+  Las tarjetas de usuarios (`usuarios_total`, `usuarios_nuevos`) y el panel de más abajo SÍ son
+  reales: vienen de conexion-api (GET /api/app/usuarios/resumen, conexión 'app' → app_db), no
+  de un mock local. Ese endpoint TODAVÍA no aplica TerritorialScope (a diferencia de PW-03) —
+  un Coordinador Territorial ve el Huila entero aquí hasta que esa regla se porte al servidor.
+  El resto sigue siendo cifra de demo: qué KPIs son obligatorios para el MVP, cuáles van en
+  tiempo real y cuál es la fuente de verdad de cada uno sigue ABIERTO en M16 (Q-0631/Q-0633/Q-0635).
 
   El panel "Dónde están tus usuarios" de más abajo estira un poco el "sin gráficos" de
   PW-02 — un desglose con barritas no es un número suelto —, pero tampoco es la analítica
@@ -100,42 +91,73 @@ export function HomePage() {
   const cuenta = user ? admin.cuentaPorId(user.id) : undefined
 
   const puedeVerUsuarios = cuenta ? tienePermiso(cuenta, 'users:view') : false
-  const usuariosEnAlcance = useMemo(
-    () => (cuenta && puedeVerUsuarios ? usuariosVisiblesPara(cuenta, op.usuarios) : []),
-    [cuenta, puedeVerUsuarios, op.usuarios],
+
+  // Datos de usuarios de la app: ya no salen del mock local — vienen de conexion-api
+  // (conexión 'app', contenedor app_db aparte de cuentas_administrativas) vía
+  // GET /api/app/usuarios/resumen. El backend todavía no aplica TerritorialScope sobre este
+  // endpoint (sí lo hace usuariosVisiblesPara para el mock): un Coordinador Territorial ve
+  // aquí el total del Huila, no solo su territorio, hasta que esa regla se porte al servidor.
+  const [resumenApp, setResumenApp] = useState<ResumenUsuariosApp | null>(null)
+  const [cargandoResumen, setCargandoResumen] = useState(true)
+
+  useEffect(() => {
+    if (!puedeVerUsuarios) {
+      setResumenApp(null)
+      setCargandoResumen(false)
+      return
+    }
+    let cancelado = false
+    setCargandoResumen(true)
+    obtenerResumenUsuariosApp()
+      .then((r) => {
+        if (!cancelado) setResumenApp(r)
+      })
+      .catch(() => {
+        if (!cancelado) setResumenApp(null)
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoResumen(false)
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [puedeVerUsuarios])
+
+  const datosTerritorio = useMemo(
+    () => (resumenApp ? resumenApp.porTerritorio.filas.map((f) => ({ nombre: f.nombre, total: f.total })) : []),
+    [resumenApp],
   )
-  const { promedioSemanal, tendenciaPct } = useMemo(
-    () => promedioIngresoSemanal(usuariosEnAlcance),
-    [usuariosEnAlcance],
+  const datosPlaya = useMemo(
+    () =>
+      resumenApp
+        ? resumenApp.porPlaya.map((f) => ({ nombre: nombrePlaya(f.playa), total: f.total, playa: f.playa }))
+        : [],
+    [resumenApp],
   )
-  const territorial = useMemo(() => resumenPorTerritorio(usuariosEnAlcance), [usuariosEnAlcance])
-  const porPlaya = useMemo(() => resumenPorPlaya(usuariosEnAlcance), [usuariosEnAlcance])
-  const maximoPorPlaya = Math.max(1, ...porPlaya.map((f) => f.total))
-  const maximoPorTerritorio = territorial.filas[0]?.total ?? 1
 
   const kpisUsuarios: Kpi[] = useMemo(
     () =>
-      puedeVerUsuarios
+      puedeVerUsuarios && resumenApp
         ? [
             {
               clave: 'usuarios_total',
               permiso: 'users:view',
               etiqueta: 'Total de usuarios',
-              valor: formatoEntero(usuariosEnAlcance.length),
-              tendencia: formatoTendenciaPct(tendenciaPct),
+              valor: formatoEntero(resumenApp.total),
+              tendencia: formatoTendenciaPct(resumenApp.ingresoSemanal.tendenciaPct),
               destino: '/PW-03',
             },
             {
               clave: 'usuarios_nuevos',
               permiso: 'users:view',
               etiqueta: 'Nuevos usuarios (prom. semanal)',
-              valor: formatoEntero(promedioSemanal),
-              tendencia: formatoTendenciaPct(tendenciaPct),
+              valor: formatoEntero(resumenApp.ingresoSemanal.promedioSemanal),
+              tendencia: formatoTendenciaPct(resumenApp.ingresoSemanal.tendenciaPct),
               destino: '/PW-03',
             },
           ]
         : [],
-    [puedeVerUsuarios, usuariosEnAlcance.length, promedioSemanal, tendenciaPct],
+    [puedeVerUsuarios, resumenApp],
   )
 
   const visibles = useMemo(
@@ -215,39 +237,81 @@ export function HomePage() {
           ))}
         </div>
 
-        {puedeVerUsuarios && usuariosEnAlcance.length > 0 && (
+        {puedeVerUsuarios && (cargandoResumen || resumenApp) && (
           <Superficie>
             <CabeceraSuperficie
               titulo="Dónde están tus usuarios"
-              descripcion={`${describirAlcance(cuenta!.territorioIds)} · el listado con filtros y exportación vive en Usuarios de la app; la analítica profunda con series de tiempo es PW-17, todavía sin construir.`}
+              descripcion={
+                cuenta
+                  ? `${describirAlcance(cuenta.territorioIds)} · el listado con filtros y exportación vive en Usuarios de la app; la analítica profunda con series de tiempo es PW-17, todavía sin construir.`
+                  : undefined
+              }
             />
-            <div className="grid gap-x-8 gap-y-6 px-6 py-5 sm:grid-cols-2">
-              <div>
-                <p className="mb-3 font-heading text-xs font-bold uppercase tracking-wide text-texto-suave">
-                  Por territorio
-                </p>
-                <ul className="flex flex-col gap-2.5">
-                  {territorial.filas.map((fila) => (
-                    <FilaBarra key={fila.territorioId} etiqueta={fila.nombre} valor={fila.total} maximo={maximoPorTerritorio} />
-                  ))}
-                </ul>
-                {territorial.otros > 0 && (
-                  <p className="mt-2.5 text-xs text-texto-suave">
-                    +{formatoEntero(territorial.otros)} usuarios en otros municipios
+            {cargandoResumen ? (
+              <p className="px-6 py-5 text-sm text-texto-suave">Cargando datos de la app…</p>
+            ) : resumenApp ? (
+              <div className="grid gap-x-8 gap-y-6 px-6 py-5 sm:grid-cols-2">
+                <div>
+                  <p className="mb-3 font-heading text-xs font-bold uppercase tracking-wide text-texto-suave">
+                    Por territorio
                   </p>
-                )}
+                  <ResponsiveContainer width="100%" height={Math.max(180, datosTerritorio.length * 32)}>
+                    <BarChart data={datosTerritorio} layout="vertical" margin={{ left: 8, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-borde/60" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="currentColor" className="text-texto-suave" />
+                      <YAxis
+                        type="category"
+                        dataKey="nombre"
+                        width={92}
+                        tick={<EtiquetaEje />}
+                        axisLine={false}
+                        tickLine={false}
+                      interval={0}
+                      />
+                      <Tooltip
+                        formatter={(valor) => [formatoEntero(Number(valor)), 'Usuarios']}
+                        contentStyle={{ fontSize: 12, borderRadius: 10 }}
+                      />
+                      <Bar dataKey="total" fill="var(--color-primario)" radius={[0, 6, 6, 0]} maxBarSize={18} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  {resumenApp.porTerritorio.otros > 0 && (
+                    <p className="mt-2.5 text-xs text-texto-suave">
+                      +{formatoEntero(resumenApp.porTerritorio.otros)} usuarios en otros municipios
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <p className="mb-3 font-heading text-xs font-bold uppercase tracking-wide text-texto-suave">
+                    Por Playa
+                  </p>
+                  <ResponsiveContainer width="100%" height={224}>
+                    <BarChart data={datosPlaya} layout="vertical" margin={{ left: 8, right: 16 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-borde/60" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} stroke="currentColor" className="text-texto-suave" />
+                      <YAxis
+                        type="category"
+                        dataKey="nombre"
+                        width={92}
+                        tick={<EtiquetaEje />}
+                        axisLine={false}
+                        tickLine={false}
+                      interval={0}
+                      />
+                      <Tooltip
+                        formatter={(valor) => [formatoEntero(Number(valor)), 'Usuarios']}
+                        contentStyle={{ fontSize: 12, borderRadius: 10 }}
+                      />
+                      <Bar dataKey="total" radius={[0, 6, 6, 0]} maxBarSize={18}>
+                        {datosPlaya.map((fila) => (
+                          <Cell key={fila.playa} fill={COLORES_PLAYA[fila.playa - 1]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
-              <div>
-                <p className="mb-3 font-heading text-xs font-bold uppercase tracking-wide text-texto-suave">
-                  Por Playa
-                </p>
-                <ul className="flex flex-col gap-2.5">
-                  {porPlaya.map((fila) => (
-                    <FilaBarra key={fila.playa} etiqueta={nombrePlaya(fila.playa)} valor={fila.total} maximo={maximoPorPlaya} />
-                  ))}
-                </ul>
-              </div>
-            </div>
+            ) : null}
           </Superficie>
         )}
 
