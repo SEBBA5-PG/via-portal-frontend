@@ -16,11 +16,21 @@ export interface FilaPlaya {
   total: number
 }
 
+export interface FilaMapaCalor {
+  municipioId: string
+  nombre: string
+  region: string
+  total: number
+}
+
 export interface ResumenUsuariosApp {
   total: number
   porTerritorio: { filas: FilaTerritorio[]; otros: number }
   porPlaya: FilaPlaya[]
   ingresoSemanal: { promedioSemanal: number; tendenciaPct: number | null }
+  // Los 37 municipios del Huila con su subregión, ceros incluidos — a diferencia de
+  // porTerritorio (top 8), esto alimenta el croquis por zonas.
+  mapaCalor: FilaMapaCalor[]
 }
 
 export function obtenerResumenUsuariosApp(): Promise<ResumenUsuariosApp> {
